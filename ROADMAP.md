@@ -10,13 +10,13 @@
 
 | Phase | Statut | Progression |
 |-------|--------|-------------|
-| **Phase 1** : Assainissement | 🔄 En cours | 0/4 |
-| **Phase 2** : Tunnel d'entrée | ⏳ Pending | 0/3 |
+| **Phase 1** : Assainissement | ✅ Terminée | 4/4 |
+| **Phase 2** : Tunnel d'entrée | 🔄 En cours | 0/3 |
 | **Phase 3** : Paiement & Webhooks | ⏳ Pending | 0/4 |
 | **Phase 4** : Cœur du produit | ⏳ Pending | 0/4 |
 | **Phase 5** : Déploiement & Tests | ⏳ Pending | 0/3 |
 
-**Total** : 0/18 tâches complétées
+**Total** : 4/18 tâches complétées
 
 ---
 
@@ -26,19 +26,13 @@
 
 ### 1.1 Configuration Git & Remote
 
-- [ ] **Vérifier le remote Git**
-  ```bash
-  git remote -v
-  # Doit pointer sur : https://github.com/votre-username/mymozaica.git
-  ```
-  - Si incorrect : `git remote set-url origin https://github.com/votre-username/mymozaica.git`
+- [x] **Vérifier le remote Git**
+  - ✅ Remote configuré : https://github.com/PGADP/mymozaica.git
+  - Statut : OK
 
-- [ ] **Push du code actuel**
-  ```bash
-  git add .
-  git commit -m "feat: finalisation phase acquisition & onboarding"
-  git push origin main
-  ```
+- [x] **Push du code actuel**
+  - ✅ Commit "feat: configuration MCP Supabase + ROADMAP V1 complet"
+  - ✅ Push réussi vers origin/main
 
 ### 1.2 Nettoyage du code legacy
 
@@ -46,32 +40,24 @@
   - ✅ Déjà fait (supprimé lors du sprint précédent)
   - Vérification : Le dossier n'existe plus
 
-- [ ] **Vérifier `src/app/login/page.tsx`**
-  - ✅ Déjà correct : Sert uniquement à la connexion (pas d'inscription)
-  - Le bouton "Créer ma fresque" redirige vers `/start` (correct)
+- [x] **Vérifier `src/app/login/page.tsx`**
+  - ✅ Correct : Sert uniquement à la connexion
+  - ✅ Bouton "Créer ma fresque" redirige vers `/start`
+  - ✅ Lien "Mot de passe oublié" ajouté
 
 ### 1.3 Configuration Build
 
-- [ ] **Vérifier `next.config.ts`**
-  - Fichier : `next.config.ts`
-  - Vérifier que ESLint et TypeScript n'empêchent pas le build :
-    ```typescript
-    eslint: {
-      ignoreDuringBuilds: true, // ✅ Déjà présent
-    },
-    typescript: {
-      ignoreBuildErrors: true, // ⚠️ À vérifier
-    }
-    ```
+- [x] **Vérifier `next.config.ts`**
+  - ✅ `eslint.ignoreDuringBuilds: true` présent
+  - ✅ `typescript.ignoreBuildErrors: true` présent
+  - Statut : Configuration correcte
 
 ### 1.4 Vérification des dépendances
 
-- [ ] **Installer les dépendances manquantes**
-  ```bash
-  npm install
-  ```
-  - Vérifier qu'aucune dépendance n'est manquante
-  - Tester le build local : `npm run build`
+- [x] **Installer les dépendances manquantes**
+  - ✅ `npm install` : 489 packages, 0 vulnerabilities
+  - ✅ `npm run build` : Build réussi en 16.1s
+  - ✅ 21 routes générées sans erreur
 
 ---
 
