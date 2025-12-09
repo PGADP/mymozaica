@@ -45,7 +45,20 @@ export async function signupWithProfile(formData: FormData) {
 
   try {
     // ====================================
-    // 2. CRÉATION DU USER AUTH (avec Admin API)
+    // 2. VÉRIFICATION : Email existe déjà ?
+    // ====================================
+    console.log("🔍 Vérification existence email:", email);
+
+    const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+    const userExists = existingUser?.users?.some(u => u.email === email);
+
+    if (userExists) {
+      console.error("❌ Email déjà utilisé:", email);
+      redirect(`/start?error=${encodeURIComponent('Cet email est déjà utilisé. Connectez-vous ou utilisez un autre email.')}`);
+    }
+
+    // ====================================
+    // 3. CRÉATION DU USER AUTH (avec Admin API)
     // ====================================
     console.log("➡️ Création compte Auth pour:", email);
 
@@ -84,7 +97,7 @@ export async function signupWithProfile(formData: FormData) {
     console.log("✅ User Auth créé:", userId);
 
     // ====================================
-    // 3. CRÉATION DU PROFIL (table profiles)
+    // 4. CRÉATION DU PROFIL (table profiles)
     // ====================================
     console.log("➡️ Création profil pour user_id:", userId);
 
@@ -113,7 +126,7 @@ export async function signupWithProfile(formData: FormData) {
     console.log("✅ Profil créé avec succès");
 
     // ====================================
-    // 4. INITIALISATION DES SESSIONS (ères)
+    // 5. INITIALISATION DES SESSIONS (ères)
     // ====================================
     console.log("➡️ Initialisation sessions pour user_id:", userId);
 
@@ -122,7 +135,7 @@ export async function signupWithProfile(formData: FormData) {
     console.log("✅ Sessions initialisées");
 
     // ====================================
-    // 5. REDIRECTION VERS PAGE DE VÉRIFICATION EMAIL
+    // 6. REDIRECTION VERS PAGE DE VÉRIFICATION EMAIL
     // ====================================
     console.log("➡️ Redirection vers page de vérification email...");
 
