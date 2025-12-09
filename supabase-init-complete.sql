@@ -55,17 +55,22 @@ CREATE TABLE IF NOT EXISTS public.eras (
 );
 
 -- Données des ères (à exécuter une seule fois)
-INSERT INTO public.eras (label, start_age, end_age, "order", description)
-VALUES
-  ('Petite enfance', 0, 5, 1, 'Les premiers souvenirs et l''éveil au monde'),
-  ('Enfance', 5, 12, 2, 'L''école primaire et les premières amitiés'),
-  ('Adolescence', 12, 18, 3, 'Le collège, le lycée et la construction de l''identité'),
-  ('Jeune adulte', 18, 30, 4, 'Les études supérieures, premiers emplois et premières expériences'),
-  ('Adulte', 30, 45, 5, 'La consolidation professionnelle et personnelle'),
-  ('Maturité', 45, 60, 6, 'L''accomplissement et la transmission'),
-  ('Senior', 60, 75, 7, 'La retraite active et les nouveaux projets'),
-  ('Grand âge', 75, NULL, 8, 'La sagesse et le regard sur une vie accomplie')
-ON CONFLICT ("order") DO NOTHING; -- Évite les duplicatas si réexécuté
+-- Vérifier d'abord si les ères existent déjà
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.eras LIMIT 1) THEN
+    INSERT INTO public.eras (label, start_age, end_age, "order", description)
+    VALUES
+      ('Petite enfance', 0, 5, 1, 'Les premiers souvenirs et l''éveil au monde'),
+      ('Enfance', 5, 12, 2, 'L''école primaire et les premières amitiés'),
+      ('Adolescence', 12, 18, 3, 'Le collège, le lycée et la construction de l''identité'),
+      ('Jeune adulte', 18, 30, 4, 'Les études supérieures, premiers emplois et premières expériences'),
+      ('Adulte', 30, 45, 5, 'La consolidation professionnelle et personnelle'),
+      ('Maturité', 45, 60, 6, 'L''accomplissement et la transmission'),
+      ('Senior', 60, 75, 7, 'La retraite active et les nouveaux projets'),
+      ('Grand âge', 75, NULL, 8, 'La sagesse et le regard sur une vie accomplie');
+  END IF;
+END $$;
 
 -- Pas de RLS sur eras (données publiques de référence)
 
