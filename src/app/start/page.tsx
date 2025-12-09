@@ -2,75 +2,121 @@
 
 import { useState } from 'react';
 import { signupWithProfile } from './actions';
-import { SubmitButton } from '@/components/ui/SubmitButton'; // Import du bouton
+import { SubmitButton } from '@/components/ui/SubmitButton';
 
 export default function StartPage() {
   const [step, setStep] = useState(1);
-  // Plus besoin de 'loading' state manuel ici
 
   const nextStep = (e: React.FormEvent) => {
     e.preventDefault();
     setStep(step + 1);
   };
 
+  const prevStep = () => {
+    setStep(step - 1);
+  };
+
+  // Titres et descriptions dynamiques par étape
+  const stepContent = {
+    1: {
+      title: "Qui êtes-vous ?",
+      description: "Ces détails aideront l'IA à contextualiser votre vie."
+    },
+    2: {
+      title: "Parlez-nous de vous",
+      description: "Donnez-nous le contexte pour personnaliser votre expérience."
+    },
+    3: {
+      title: "Sécurisez votre récit",
+      description: "Créez vos identifiants pour sauvegarder votre progression."
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FDF6E3] flex items-center justify-center p-4">
       <div className="w-full max-w-2xl bg-white rounded-[2rem] shadow-2xl border border-white overflow-hidden flex flex-col md:flex-row">
-        
+
         {/* Colonne Gauche (Design) */}
         <div className="bg-[#2C3E50] text-white p-8 md:w-1/3 flex flex-col justify-between relative overflow-hidden">
           <div className="relative z-10">
-            <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center font-serif font-bold mb-6">M</div>
+            <div className="w-10 h-10 bg-white/10 rounded-full flex items-center justify-center font-serif font-bold mb-6">
+              M
+            </div>
             <h2 className="font-serif text-2xl font-bold leading-tight mb-2">
-              {step === 1 ? "Qui êtes-vous ?" : "Sécurisez votre récit"}
+              {stepContent[step as keyof typeof stepContent].title}
             </h2>
             <p className="text-white/60 text-sm">
-              {step === 1 ? "Ces détails aideront l'IA à contextualiser votre vie." : "Créez vos identifiants pour sauvegarder votre progression."}
+              {stepContent[step as keyof typeof stepContent].description}
             </p>
           </div>
+
+          {/* Indicateur de progression (3 étapes) */}
           <div className="flex gap-2 mt-8 relative z-10">
             <div className={`h-1.5 rounded-full flex-1 transition-colors ${step >= 1 ? 'bg-[#E76F51]' : 'bg-white/20'}`} />
             <div className={`h-1.5 rounded-full flex-1 transition-colors ${step >= 2 ? 'bg-[#E76F51]' : 'bg-white/20'}`} />
+            <div className={`h-1.5 rounded-full flex-1 transition-colors ${step >= 3 ? 'bg-[#E76F51]' : 'bg-white/20'}`} />
           </div>
         </div>
 
-        {/* Colonne Droite (Form) */}
+        {/* Colonne Droite (Formulaire) */}
         <div className="p-8 md:w-2/3">
           <form action={signupWithProfile}>
-            
-            {/* ÉTAPE 1 */}
+
+            {/* ============================================ */}
+            {/* ÉTAPE 1 : IDENTITÉ */}
+            {/* ============================================ */}
             <div className={step === 1 ? 'block space-y-5' : 'hidden'}>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs font-bold uppercase text-[#47627D]">Prénom</label>
-                  <input name="firstName" required className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2A9D8F] outline-none text-[#2C3E50]" placeholder="Prénom" />
+                  <label className="text-xs font-bold uppercase text-[#47627D]">
+                    Prénom *
+                  </label>
+                  <input
+                    name="firstName"
+                    required
+                    className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2A9D8F] outline-none text-[#2C3E50]"
+                    placeholder="Jean"
+                  />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs font-bold uppercase text-[#47627D]">Nom</label>
-                  <input name="lastName" required className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2A9D8F] outline-none text-[#2C3E50]" placeholder="Nom" />
+                  <label className="text-xs font-bold uppercase text-[#47627D]">
+                    Nom *
+                  </label>
+                  <input
+                    name="lastName"
+                    required
+                    className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2A9D8F] outline-none text-[#2C3E50]"
+                    placeholder="Dupont"
+                  />
                 </div>
               </div>
+
               <div className="space-y-1">
-                <label className="text-xs font-bold uppercase text-[#47627D]">Date de naissance</label>
-                <input type="date" name="birthDate" required className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2A9D8F] outline-none text-[#2C3E50]" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase text-[#47627D]">Ville de naissance</label>
-                <input name="birthCity" required className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2A9D8F] outline-none text-[#2C3E50]" placeholder="Ex: Lyon, France" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase text-[#47627D] flex justify-between">
-                  <span>Contexte de vie (Bio)</span>
+                <label className="text-xs font-bold uppercase text-[#47627D]">
+                  Date de naissance *
                 </label>
-                <textarea 
-                  name="bio" 
-                  rows={3} 
-                  className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2A9D8F] outline-none text-[#2C3E50] text-sm"
-                  placeholder="Ex: Famille nombreuse, expatriation, événement marquant..."
-                ></textarea>
+                <input
+                  type="date"
+                  name="birthDate"
+                  required
+                  className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2A9D8F] outline-none text-[#2C3E50]"
+                />
               </div>
-              <button 
-                type="button" 
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-[#47627D]">
+                  Ville de naissance *
+                </label>
+                <input
+                  name="birthCity"
+                  required
+                  className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2A9D8F] outline-none text-[#2C3E50]"
+                  placeholder="Ex: Lyon, France"
+                />
+              </div>
+
+              <button
+                type="button"
                 onClick={nextStep}
                 className="w-full py-3.5 bg-[#2C3E50] text-white font-bold rounded-xl hover:bg-[#1A252F] transition-all"
               >
@@ -78,25 +124,115 @@ export default function StartPage() {
               </button>
             </div>
 
-            {/* ÉTAPE 2 */}
+            {/* ============================================ */}
+            {/* ÉTAPE 2 : BIO + RED FLAGS */}
+            {/* ============================================ */}
             <div className={step === 2 ? 'block space-y-5' : 'hidden'}>
               <div className="space-y-1">
-                <label className="text-xs font-bold uppercase text-[#47627D]">Email</label>
-                <input type="email" name="email" required className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#E76F51] outline-none text-[#2C3E50]" placeholder="votre@email.com" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs font-bold uppercase text-[#47627D]">Mot de passe</label>
-                <input type="password" name="password" required className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#E76F51] outline-none text-[#2C3E50]" placeholder="8 caractères min." />
+                <label className="text-xs font-bold uppercase text-[#47627D]">
+                  Contexte de vie (optionnel)
+                </label>
+                <p className="text-xs text-[#47627D]/70 mb-2">
+                  Partagez des éléments clés de votre parcours (famille, lieux, événements marquants...).
+                </p>
+                <textarea
+                  name="bio"
+                  rows={4}
+                  className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#2A9D8F] outline-none text-[#2C3E50] text-sm resize-none"
+                  placeholder="Ex: Famille nombreuse, expatriation à l'étranger, reconversion professionnelle..."
+                ></textarea>
               </div>
 
-              {/* BOUTON INTELLIGENT */}
-              <SubmitButton className="w-full py-4 bg-[#E76F51] text-white font-bold rounded-xl hover:bg-[#D65D40] transition-all shadow-lg">
+              <div className="bg-[#FDF6E3] p-4 rounded-xl border border-[#E9C46A]">
+                <div className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    id="redFlags"
+                    name="redFlags"
+                    value="sensitive_topics"
+                    className="mt-1 w-4 h-4 text-[#E76F51] bg-gray-100 border-gray-300 rounded focus:ring-[#E76F51] focus:ring-2"
+                  />
+                  <div className="flex-1">
+                    <label htmlFor="redFlags" className="text-sm font-medium text-[#2C3E50] cursor-pointer">
+                      Mon parcours comporte des sujets sensibles
+                    </label>
+                    <p className="text-xs text-[#47627D]/80 mt-1">
+                      (Deuils, traumatismes, difficultés familiales...)
+                      L'IA adaptera son ton et sera plus bienveillante.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={prevStep}
+                  className="w-1/3 py-3 text-[#47627D] font-medium rounded-xl hover:bg-[#FDF6E3] transition-all"
+                >
+                  Retour
+                </button>
+                <button
+                  type="button"
+                  onClick={nextStep}
+                  className="flex-1 py-3.5 bg-[#2C3E50] text-white font-bold rounded-xl hover:bg-[#1A252F] transition-all"
+                >
+                  Continuer
+                </button>
+              </div>
+            </div>
+
+            {/* ============================================ */}
+            {/* ÉTAPE 3 : AUTH (EMAIL + PASSWORD) */}
+            {/* ============================================ */}
+            <div className={step === 3 ? 'block space-y-5' : 'hidden'}>
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-[#47627D]">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#E76F51] outline-none text-[#2C3E50]"
+                  placeholder="votre@email.com"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-bold uppercase text-[#47627D]">
+                  Mot de passe *
+                </label>
+                <input
+                  type="password"
+                  name="password"
+                  required
+                  minLength={8}
+                  className="w-full p-3 bg-[#FDF6E3]/30 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#E76F51] outline-none text-[#2C3E50]"
+                  placeholder="8 caractères minimum"
+                />
+                <p className="text-xs text-[#47627D]/60 mt-1">
+                  Minimum 8 caractères
+                </p>
+              </div>
+
+              <div className="bg-[#FDF6E3] p-3 rounded-lg">
+                <p className="text-xs text-[#47627D]/80">
+                  En créant votre compte, vous acceptez nos{' '}
+                  <a href="/terms" className="text-[#2A9D8F] underline">conditions d'utilisation</a>
+                  {' '}et notre{' '}
+                  <a href="/privacy" className="text-[#2A9D8F] underline">politique de confidentialité</a>.
+                </p>
+              </div>
+
+              {/* BOUTON SUBMIT INTELLIGENT */}
+              <SubmitButton className="w-full py-4 bg-[#E76F51] text-white font-bold rounded-xl hover:bg-[#D65D40] transition-all shadow-lg hover:shadow-xl">
                 Créer mon compte
               </SubmitButton>
-              
-              <button 
+
+              <button
                 type="button"
-                onClick={() => setStep(1)}
+                onClick={prevStep}
                 className="w-full text-sm text-[#47627D] hover:underline mt-2"
               >
                 Retour
