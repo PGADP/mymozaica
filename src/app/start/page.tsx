@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { signupWithProfile } from './actions';
 import { SubmitButton } from '@/components/ui/SubmitButton';
 
-export default function StartPage() {
+function StartPageContent() {
   const [step, setStep] = useState(1);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const searchParams = useSearchParams();
@@ -259,5 +259,18 @@ export default function StartPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Wrapper avec Suspense pour Next.js 15
+export default function StartPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#FDF6E3] flex items-center justify-center">
+        <div className="text-[#2C3E50]">Chargement...</div>
+      </div>
+    }>
+      <StartPageContent />
+    </Suspense>
   );
 }
