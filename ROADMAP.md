@@ -11,12 +11,12 @@
 | Phase | Statut | Progression |
 |-------|--------|-------------|
 | **Phase 1** : Assainissement | ✅ Terminée | 4/4 |
-| **Phase 2** : Tunnel d'entrée | 🔄 En cours | 0/3 |
-| **Phase 3** : Paiement & Webhooks | ⏳ Pending | 0/4 |
+| **Phase 2** : Tunnel d'entrée | ✅ Terminée | 3/3 |
+| **Phase 3** : Paiement & Webhooks | 🔄 En cours | 0/4 |
 | **Phase 4** : Cœur du produit | ⏳ Pending | 0/4 |
 | **Phase 5** : Déploiement & Tests | ⏳ Pending | 0/3 |
 
-**Total** : 4/18 tâches complétées
+**Total** : 7/18 tâches complétées
 
 ---
 
@@ -68,39 +68,38 @@
 ### 2.1 Vérification Base de Données
 
 - [x] **Table `profiles` - Colonnes obligatoires**
-  - ✅ `billing_status` (text, default 'free') - Ajouté via migration
-  - ✅ `red_flags` (text) - Déjà présent
-  - Action : Exécuter `supabase-migration-billing.sql` dans le dashboard Supabase
+  - ✅ `billing_status` (text, default 'free') - Migration SQL créée
+  - ✅ `red_flags` (text) - Présent
+  - ✅ Fichier `supabase-init-complete.sql` créé (schéma complet)
 
-- [ ] **Vérifier les tables `eras` et `chat_sessions`**
-  ```sql
-  -- Vérifier que la table eras est peuplée avec les 8 ères
-  SELECT * FROM eras ORDER BY "order";
-  -- Attendu : 8 lignes (Petite enfance, Enfance, Adolescence, etc.)
-  ```
+- [x] **Tables `eras` et `chat_sessions`**
+  - ✅ DDL complet dans `supabase-init-complete.sql`
+  - ✅ 8 ères prédéfinies avec INSERT
+  - ⚠️ **Action utilisateur requise** : Exécuter `supabase-init-complete.sql` dans le SQL Editor Supabase
 
 ### 2.2 Page `/start` - Wizard d'inscription
 
-- [ ] **Finaliser `src/app/start/page.tsx`**
-  - Fichier : `src/app/start/page.tsx`
-  - État actuel : Wizard 2 étapes (Bio + Auth)
-  - **Action** : Transformer en 3 étapes :
-    1. **Étape 1 - Identité** : firstName, lastName, birthDate, birthCity
-    2. **Étape 2 - Bio + Red Flags** : bio (textarea), redFlags (checkbox si sujets sensibles)
-    3. **Étape 3 - Auth** : email, password
-  - Design : Respecter la charte Céramique
-  - Validation : Client-side (formulaire React) + Server-side (actions)
+- [x] **Finaliser `src/app/start/page.tsx`**
+  - ✅ Wizard 3 étapes complété :
+    1. **Identité** : firstName, lastName, birthDate, birthCity
+    2. **Bio + Red Flags** : bio (textarea), redFlags (checkbox avec message explicatif)
+    3. **Auth** : email, password (min 8 caractères)
+  - ✅ Design Céramique respecté (Cream, Terracotta, Emerald)
+  - ✅ Indicateur de progression (3 barres)
+  - ✅ Navigation prev/next entre les étapes
 
 ### 2.3 Action Server `/start/actions.ts`
 
-- [ ] **Finaliser `src/app/start/actions.ts`**
-  - Fichier : `src/app/start/actions.ts`
-  - **Problème actuel** : Utilise le client standard (RLS actif)
-  - **Solution** : Créer un `createAdminClient` avec SERVICE_ROLE_KEY
-
-  **Checklist de modifications :**
-
-  - [ ] Créer helper `createAdminClient()` dans `src/utils/supabase/admin.ts`
+- [x] **Refactorisation complète avec Admin Client**
+  - ✅ Helper `createAdminClient()` créé dans `src/utils/supabase/admin.ts`
+  - ✅ Utilise `supabaseAdmin.auth.admin.createUser()` (pas de confirmation email)
+  - ✅ Création profil avec `billing_status='free'`
+  - ✅ Gestion des `red_flags` (checkbox → string)
+  - ✅ Calcul automatique de l'âge
+  - ✅ Initialisation des `chat_sessions` (8 ères avec statuts calculés)
+  - ✅ Rollback automatique en cas d'erreur (suppression user Auth)
+  - ✅ Redirection vers Lemonsqueezy avec `checkout[custom][user_id]`
+  - ✅ Logs détaillés pour debugging
     ```typescript
     import { createClient } from '@supabase/supabase-js';
 
