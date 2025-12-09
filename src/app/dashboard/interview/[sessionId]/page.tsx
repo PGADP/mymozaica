@@ -2,8 +2,15 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { InterviewChat } from "@/components/chat/InterviewChat";
 
-export default async function InterviewPage({ params }: { params: { sessionId: string } }) {
-  const { sessionId } = await params; // Next.js 15 await params
+// ⚠️ CORRECTION TYPE NEXT.JS 15 : params est une Promise
+interface PageProps {
+  params: Promise<{ sessionId: string }>;
+}
+
+export default async function InterviewPage({ params }: PageProps) {
+  // ⚠️ CORRECTION : On await les params
+  const { sessionId } = await params;
+  
   const supabase = await createClient();
   
   const { data: { user } } = await supabase.auth.getUser();
