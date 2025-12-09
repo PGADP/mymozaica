@@ -45,16 +45,34 @@ export async function signupWithProfile(formData: FormData) {
 
   try {
     // ====================================
-    // 2. VÉRIFICATION : Email existe déjà ?
+    // 2. VÉRIFICATION : Email existe déjà dans profiles ?
     // ====================================
-    console.log("🔍 Vérification existence email:", email);
+    console.log("🔍 Vérification existence email dans profiles:", email);
 
-    const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
-    const userExists = existingUser?.users?.some(u => u.email === email);
+    const { data: existingProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('id, email')
+      .eq('email', email)
+      .maybeSingle();
 
-    if (userExists) {
-      console.error("❌ Email déjà utilisé:", email);
+    if (existingProfile) {
+      console.error("❌ Email déjà utilisé (profil existe):", email);
       redirect(`/start?error=${encodeURIComponent('Cet email est déjà utilisé. Connectez-vous ou utilisez un autre email.')}`);
+    }
+
+    // Vérifier aussi dans auth.users
+    console.log("🔍 Vérification existence email dans auth.users:", email);
+
+    const { data: existingAuthUser } = await supabaseAdmin.auth.admin.listUsers();
+    const authUserExists = existingAuthUser?.users?.find(u => u.email === email);
+
+    if (authUserExists) {
+      console.error("❌ Email déjà utilisé (auth.users existe):", email);
+      console.log("🧹 Tentative de nettoyage automatique...");
+
+      // Supprimer l'utilisateur orphelin (auth existe mais pas profil)
+      await supabaseAdmin.auth.admin.deleteUser(authUserExists.id);
+      console.log("✅ Utilisateur orphelin supprimé, nouvelle tentative...");
     }
 
     // ====================================
