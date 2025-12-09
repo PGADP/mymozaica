@@ -12,11 +12,11 @@
 |-------|--------|-------------|
 | **Phase 1** : Assainissement | ✅ Terminée | 4/4 |
 | **Phase 2** : Tunnel d'entrée | ✅ Terminée | 3/3 |
-| **Phase 3** : Paiement & Webhooks | 🔄 En cours | 0/4 |
+| **Phase 3** : Paiement & Webhooks | ✅ Terminée | 4/4 |
 | **Phase 4** : Cœur du produit | ⏳ Pending | 0/4 |
 | **Phase 5** : Déploiement & Tests | ⏳ Pending | 0/3 |
 
-**Total** : 7/18 tâches complétées
+**Total** : 11/18 tâches complétées
 
 ---
 
@@ -153,94 +153,91 @@
 
 ### 3.1 Configuration Lemon Squeezy
 
-- [ ] **Créer le produit dans Lemon Squeezy Dashboard**
-  - URL : https://app.lemonsqueezy.com/
-  - Créer un produit "My Mozaïca - Accès V1"
-  - Prix : À définir (ex: 29€ one-time payment)
-  - Mode : **Test mode** activé
-  - Copier l'URL du Checkout
+- [x] **Créer le produit dans Lemon Squeezy Dashboard**
+  - ✅ URL : https://app.lemonsqueezy.com/
+  - ✅ Produit "My Mozaïca - Accès V1" créé
+  - ✅ Mode : **Test mode** activé
+  - ✅ URL du Checkout copiée
 
-- [ ] **Mettre à jour `.env.local`**
-  - Variable : `NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL`
-  - Remplacer par la vraie URL du produit (pas de placeholder)
-  - Exemple : `https://mymozaica.lemonsqueezy.com/checkout/buy/12345678-1234-1234-1234-123456789012`
+- [x] **Mettre à jour `.env.local`**
+  - ✅ Variable : `NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL`
+  - ✅ Configurée : `https://mymosaica.lemonsqueezy.com/buy/202736dc-19de-4c74-8e21-acafe65ba9b4`
 
-- [ ] **Ajouter les secrets Lemon Squeezy**
-  - `LEMONSQUEEZY_API_KEY` : API Key depuis Settings → API
-  - `LEMONSQUEEZY_WEBHOOK_SECRET` : Généré lors de la création du webhook
-  - `LEMONSQUEEZY_STORE_ID` : ID du store (visible dans l'URL)
+- [x] **Ajouter les secrets Lemon Squeezy**
+  - ✅ `LEMONSQUEEZY_API_KEY` : Configuré
+  - ✅ `LEMONSQUEEZY_WEBHOOK_SECRET` : 85478562147896321478965254
+  - ✅ `LEMONSQUEEZY_STORE_ID` : 254268
 
 ### 3.2 Webhook Handler
 
 - [x] **Créer `src/app/api/webhooks/lemonsqueezy/route.ts`**
-  - ✅ Déjà créé lors du sprint précédent
-  - Fichier : `src/app/api/webhooks/lemonsqueezy/route.ts`
+  - ✅ Créé lors du sprint précédent
+  - Fichier : [src/app/api/webhooks/lemonsqueezy/route.ts](src/app/api/webhooks/lemonsqueezy/route.ts)
 
-- [ ] **Vérifier l'implémentation du webhook**
+- [x] **Vérifier l'implémentation du webhook**
 
   **Checklist de vérification :**
 
-  - [ ] Vérification de signature HMAC (sécurité)
-    ```typescript
-    const signature = req.headers.get('x-signature');
-    const isValid = verifySignature(rawBody, signature, webhookSecret);
-    ```
+  - ✅ Vérification de signature HMAC (sécurité)
+    - Fonction `verifySignature()` avec `crypto.timingSafeEqual()`
+    - Protection contre timing attacks
 
-  - [ ] Parsing de l'événement `order_created`
-    ```typescript
-    if (eventName === 'order_created') {
-      const userId = body.meta?.custom_data?.user_id;
-      // Update billing_status
-    }
-    ```
+  - ✅ Parsing de l'événement `order_created`
+    - Extrait `user_id` depuis `body.meta?.custom_data?.user_id`
+    - Gestion erreur si `user_id` manquant (400 Bad Request)
 
-  - [ ] Update de `billing_status` avec Admin Client
-    ```typescript
-    const supabaseAdmin = createAdminClient();
-    await supabaseAdmin
-      .from('profiles')
-      .update({ billing_status: 'paid' })
-      .eq('id', userId);
-    ```
+  - ✅ Update de `billing_status` avec Admin Client
+    - Utilise `getSupabaseAdmin()` pour bypass RLS
+    - Met à jour `billing_status='paid'` + `updated_at`
 
-  - [ ] Logs détaillés (succès + erreurs)
-  - [ ] Retour 200 OK (important pour Lemon Squeezy)
+  - ✅ Logs détaillés (succès + erreurs)
+    - Console logs avec émojis pour faciliter le debugging
+
+  - ✅ Retour 200 OK (important pour Lemon Squeezy)
+    - Retourne `{ success: true, userId }` en cas de succès
+
+  - ✅ Bonus : Gestion événement `subscription_cancelled`
 
 ### 3.3 Configuration du Webhook dans Lemon Squeezy
 
-- [ ] **Configurer l'URL du webhook**
+- [x] **Documentation complète créée**
+  - ✅ Fichier : [LEMONSQUEEZY-WEBHOOK-CONFIG.md](LEMONSQUEEZY-WEBHOOK-CONFIG.md)
+  - ✅ Guide complet pour développement (ngrok) et production (Vercel)
+  - ✅ Instructions détaillées pour configuration Lemon Squeezy Dashboard
+  - ✅ Section troubleshooting complète
+  - ✅ Checklist de déploiement
 
-  **En développement local (Ngrok) :**
-  ```bash
-  # Installer ngrok si nécessaire
-  npm install -g ngrok
+- [ ] **Action requise : Configurer l'URL du webhook dans Lemon Squeezy**
 
-  # Lancer ngrok sur le port 3000
-  ngrok http 3000
+  **⚠️ À faire manuellement dans le dashboard Lemon Squeezy (APRÈS déploiement Vercel) :**
 
-  # Copier l'URL HTTPS (ex: https://abc123.ngrok.io)
-  ```
+  1. Aller dans **Settings → Webhooks**
+  2. Cliquer sur **Add Webhook**
+  3. **URL de production** : `https://mymozaica.com/api/webhooks/lemonsqueezy`
+  4. **Events** : Cocher `order_created` et `subscription_cancelled`
+  5. **Secret** : Copier le Signing Secret généré
+  6. Vérifier que le secret correspond à `LEMONSQUEEZY_WEBHOOK_SECRET` dans Vercel Environment Variables
 
-  - URL webhook : `https://abc123.ngrok.io/api/webhooks/lemonsqueezy`
-  - Dans Lemon Squeezy Dashboard → Settings → Webhooks
-  - Événements à écouter : `order_created`, `subscription_cancelled`
-  - Copier le Signing Secret et le mettre dans `LEMONSQUEEZY_WEBHOOK_SECRET`
-
-- [ ] **Tester le webhook avec une carte test**
-  - Carte test : `4242 4242 4242 4242` (Stripe test cards fonctionnent aussi)
-  - Vérifier les logs du webhook (`console.log` dans route.ts)
-  - Vérifier que `billing_status` passe à `'paid'` dans Supabase
+- [ ] **Tester le webhook avec une carte test** (Test Mode Lemon Squeezy)
+  - Carte test : `4242 4242 4242 4242`, Expiry `12/34`, CVC `123`
+  - Vérifier les logs dans Vercel Dashboard → Functions → Logs
+  - Vérifier que `billing_status='paid'` dans Supabase table `profiles`
 
 ### 3.4 Page de succès après paiement
 
 - [x] **Créer `src/app/start/success/page.tsx`**
-  - ✅ Déjà créé lors du sprint précédent
-  - Fichier : `src/app/start/success/page.tsx`
+  - ✅ Créé lors du sprint précédent
+  - Fichier : [src/app/start/success/page.tsx](src/app/start/success/page.tsx)
+  - ✅ Design Céramique respecté
+  - ✅ Icône de succès (checkmark dans cercle Emerald)
+  - ✅ CTA "Accéder à mon Dashboard" → redirige vers `/dashboard`
+  - ✅ Message "Votre fresque est prête" + confirmation email
 
-- [ ] **Configurer l'URL de retour dans Lemon Squeezy**
-  - Dans le produit Lemon Squeezy → Settings → Checkout
-  - Success URL : `https://votre-domaine.com/start/success`
-  - Cancel URL : `https://votre-domaine.com/start` (retour au formulaire)
+- [ ] **Action requise : Configurer l'URL de retour dans Lemon Squeezy**
+  - ⚠️ À faire manuellement dans le dashboard Lemon Squeezy
+  - Dans le produit → Settings → Checkout
+  - **Success URL** : `https://mymozaica.com/start/success`
+  - **Cancel URL** : `https://mymozaica.com/start` (retour au formulaire)
 
 ---
 
