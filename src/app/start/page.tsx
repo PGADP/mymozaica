@@ -1,11 +1,22 @@
 'use client'
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { signupWithProfile } from './actions';
 import { SubmitButton } from '@/components/ui/SubmitButton';
 
 export default function StartPage() {
   const [step, setStep] = useState(1);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+
+  // Récupérer l'erreur depuis l'URL
+  useEffect(() => {
+    const error = searchParams.get('error');
+    if (error) {
+      setErrorMessage(decodeURIComponent(error));
+    }
+  }, [searchParams]);
 
   const nextStep = (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,23 +155,21 @@ export default function StartPage() {
               </div>
 
               <div className="bg-[#FDF6E3] p-4 rounded-xl border border-[#E9C46A]">
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
+                <div className="space-y-1">
+                  <label htmlFor="redFlags" className="text-sm font-medium text-[#2C3E50]">
+                    Sujets sensibles (optionnel)
+                  </label>
+                  <p className="text-xs text-[#47627D]/80 mb-2">
+                    Si votre parcours comporte des sujets délicats (deuils, traumatismes, difficultés familiales...),
+                    mentionnez-les ici. L'IA adaptera son ton pour être plus bienveillante.
+                  </p>
+                  <textarea
                     id="redFlags"
                     name="redFlags"
-                    value="sensitive_topics"
-                    className="mt-1 w-4 h-4 text-[#E76F51] bg-gray-100 border-gray-300 rounded focus:ring-[#E76F51] focus:ring-2"
-                  />
-                  <div className="flex-1">
-                    <label htmlFor="redFlags" className="text-sm font-medium text-[#2C3E50] cursor-pointer">
-                      Mon parcours comporte des sujets sensibles
-                    </label>
-                    <p className="text-xs text-[#47627D]/80 mt-1">
-                      (Deuils, traumatismes, difficultés familiales...)
-                      L'IA adaptera son ton et sera plus bienveillante.
-                    </p>
-                  </div>
+                    rows={3}
+                    className="w-full p-3 bg-white rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#E76F51] outline-none text-[#2C3E50] text-sm resize-none"
+                    placeholder="Ex: Perte d'un proche en 2015, divorce difficile, maladie grave..."
+                  ></textarea>
                 </div>
               </div>
 
@@ -186,6 +195,13 @@ export default function StartPage() {
             {/* ÉTAPE 3 : AUTH (EMAIL + PASSWORD) */}
             {/* ============================================ */}
             <div className={step === 3 ? 'block space-y-5' : 'hidden'}>
+              {/* Message d'erreur */}
+              {errorMessage && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl">
+                  <p className="text-sm font-medium">{errorMessage}</p>
+                </div>
+              )}
+
               <div className="space-y-1">
                 <label className="text-xs font-bold uppercase text-[#47627D]">
                   Email *

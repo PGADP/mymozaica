@@ -27,12 +27,12 @@ export async function signupWithProfile(formData: FormData) {
   const firstName = formData.get("firstName") as string;
   const lastName = formData.get("lastName") as string;
   const bio = formData.get("bio") as string || null; // Optionnel
-  const redFlagsChecked = formData.get("redFlags"); // Checkbox => 'sensitive_topics' ou null
+  const redFlagsText = formData.get("redFlags") as string || null; // Textarea
   const birthDateRaw = formData.get("birthDate") as string;
   const birthCity = formData.get("birthCity") as string;
 
-  // Transformation de red_flags (checkbox => string ou null)
-  const redFlags = redFlagsChecked === 'sensitive_topics' ? 'sensitive_topics' : null;
+  // red_flags est maintenant un texte libre (textarea), pas une checkbox
+  const redFlags = redFlagsText && redFlagsText.trim().length > 0 ? redFlagsText.trim() : null;
 
   console.log("📋 Données extraites:", {
     email,
@@ -52,7 +52,7 @@ export async function signupWithProfile(formData: FormData) {
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
-      email_confirm: false, // Pas de confirmation email pour simplifier le MVP
+      email_confirm: true, // Envoyer email de confirmation
       user_metadata: {
         full_name: `${firstName} ${lastName}`.trim()
       }
@@ -60,7 +60,19 @@ export async function signupWithProfile(formData: FormData) {
 
     if (authError) {
       console.error("❌ Erreur création Auth:", authError.message);
-      redirect(`/start?error=${encodeURIComponent(authError.message)}`);
+
+      // Gestion d'erreurs spécifiques
+      let userFriendlyMessage = authError.message;
+
+      if (authError.message.includes('already been registered') || authError.message.includes('already exists')) {
+        userFriendlyMessage = 'Cet email est déjà utilisé. Connectez-vous ou utilisez un autre email.';
+      } else if (authError.message.includes('password')) {
+        userFriendlyMessage = 'Le mot de passe ne respecte pas les critères requis (minimum 8 caractères).';
+      } else if (authError.message.includes('email')) {
+        userFriendlyMessage = 'L\'adresse email n\'est pas valide.';
+      }
+
+      redirect(`/start?error=${encodeURIComponent(userFriendlyMessage)}`);
     }
 
     const userId = authData.user?.id;
@@ -110,24 +122,13 @@ export async function signupWithProfile(formData: FormData) {
     console.log("✅ Sessions initialisées");
 
     // ====================================
-    // 5. REDIRECTION VERS LEMON SQUEEZY
+    // 5. REDIRECTION VERS PAGE DE VÉRIFICATION EMAIL
     // ====================================
-    console.log("➡️ Redirection vers Lemon Squeezy Checkout...");
+    console.log("➡️ Redirection vers page de vérification email...");
 
-    const checkoutUrl = process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL;
-
-    if (!checkoutUrl) {
-      console.error("❌ URL Lemonsqueezy non configurée");
-      // Fallback: Rediriger vers une page de succès temporaire
-      redirect('/start/success');
-    }
-
-    // Construction de l'URL avec custom data (user_id pour le webhook)
-    const checkoutWithParams = `${checkoutUrl}?checkout[email]=${encodeURIComponent(email)}&checkout[custom][user_id]=${userId}`;
-
-    console.log("🔗 URL Checkout:", checkoutWithParams);
-
-    redirect(checkoutWithParams);
+    // L'utilisateur doit confirmer son email avant de payer
+    // La redirection vers Lemonsqueezy se fera APRÈS confirmation email
+    redirect('/auth/verify-email');
 
   } catch (error) {
     console.error("❌ Erreur critique lors de l'inscription:", error);
