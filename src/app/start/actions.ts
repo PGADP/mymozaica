@@ -49,30 +49,52 @@ export async function signupWithProfile(formData: FormData) {
     // ====================================
     console.log("🔍 Vérification existence email dans profiles:", email);
 
-    const { data: existingProfile } = await supabaseAdmin
+    const { data: existingProfile, error: checkProfileError } = await supabaseAdmin
       .from('profiles')
-      .select('id, email')
+      .select('id, email, created_at')
       .eq('email', email)
       .maybeSingle();
 
+    console.log("📊 Résultat vérification profil:", {
+      found: !!existingProfile,
+      data: existingProfile,
+      error: checkProfileError
+    });
+
     if (existingProfile) {
-      console.error("❌ Email déjà utilisé (profil existe):", email);
+      console.error("❌ Email déjà utilisé (profil existe):", existingProfile);
       redirect(`/start?error=${encodeURIComponent('Cet email est déjà utilisé. Connectez-vous ou utilisez un autre email.')}`);
     }
 
     // Vérifier aussi dans auth.users
     console.log("🔍 Vérification existence email dans auth.users:", email);
 
-    const { data: existingAuthUser } = await supabaseAdmin.auth.admin.listUsers();
+    const { data: existingAuthUser, error: authListError } = await supabaseAdmin.auth.admin.listUsers();
+
+    console.log("📊 Total auth users:", existingAuthUser?.users?.length || 0);
+
+    if (authListError) {
+      console.error("❌ Erreur listUsers:", authListError);
+    }
+
     const authUserExists = existingAuthUser?.users?.find(u => u.email === email);
 
-    if (authUserExists) {
-      console.error("❌ Email déjà utilisé (auth.users existe):", email);
-      console.log("🧹 Tentative de nettoyage automatique...");
+    console.log("📊 Auth user trouvé pour cet email:", {
+      found: !!authUserExists,
+      id: authUserExists?.id,
+      email: authUserExists?.email
+    });
 
-      // Supprimer l'utilisateur orphelin (auth existe mais pas profil)
-      await supabaseAdmin.auth.admin.deleteUser(authUserExists.id);
-      console.log("✅ Utilisateur orphelin supprimé, nouvelle tentative...");
+    if (authUserExists) {
+      console.error("⚠️ Email existe dans auth.users, nettoyage...");
+
+      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(authUserExists.id);
+
+      if (deleteError) {
+        console.error("❌ Erreur suppression auth user:", deleteError);
+      } else {
+        console.log("✅ Utilisateur orphelin supprimé:", authUserExists.id);
+      }
     }
 
     // ====================================
