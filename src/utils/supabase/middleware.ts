@@ -42,7 +42,7 @@ export async function updateSession(request: NextRequest) {
   // Si pas d'utilisateur et qu'on essaie d'accéder au dashboard ou à l'onboarding
   if (
     !user &&
-    (request.nextUrl.pathname.startsWith('/dashboard') || 
+    (request.nextUrl.pathname.startsWith('/dashboard') ||
      request.nextUrl.pathname.startsWith('/onboarding') ||
      request.nextUrl.pathname.startsWith('/payment')) // Ajout de la protection paiement
   ) {
@@ -51,7 +51,26 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // 5. Redirection inverse (Si déjà connecté, ne pas laisser aller sur login ou start)
+  // 5. Vérification du billing_status pour accès au dashboard
+  if (user && request.nextUrl.pathname.startsWith('/dashboard')) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('billing_status')
+      .eq('id', user.id)
+      .single();
+
+    // Si le billing_status n'est pas 'paid', rediriger vers Lemonsqueezy
+    if (profile?.billing_status !== 'paid') {
+      const checkoutUrl = process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL;
+
+      if (checkoutUrl) {
+        const checkoutWithParams = `${checkoutUrl}?checkout[email]=${encodeURIComponent(user.email || '')}&checkout[custom][user_id]=${user.id}`;
+        return NextResponse.redirect(checkoutWithParams);
+      }
+    }
+  }
+
+  // 6. Redirection inverse (Si déjà connecté, ne pas laisser aller sur login ou start)
   if (user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/start')) {
      const url = request.nextUrl.clone()
      url.pathname = '/dashboard'

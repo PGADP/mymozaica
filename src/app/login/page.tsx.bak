@@ -2,26 +2,14 @@
 
 import { login, signup } from './actions'
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
-import { useEffect, useState, Suspense } from 'react'
 
-function LoginPageContent() {
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const searchParams = useSearchParams();
-
-  useEffect(() => {
-    const error = searchParams.get('error');
-    if (error) {
-      setErrorMessage(decodeURIComponent(error));
-    }
-  }, [searchParams]);
-
+export default function LoginPage() {
   return (
     <div className="min-h-screen bg-[#FDF6E3] flex flex-col items-center justify-center p-4 font-sans text-[#2C3E50]">
-
+      
       {/* Carte de Connexion */}
       <div className="w-full max-w-md bg-white p-10 rounded-[2rem] shadow-2xl shadow-[#2C3E50]/5 border border-white">
-
+        
         {/* En-tête */}
         <div className="text-center mb-10">
           <div className="w-16 h-16 bg-[#E76F51] rounded-2xl rotate-3 mx-auto mb-6 flex items-center justify-center text-white font-serif font-bold text-3xl shadow-lg shadow-[#E76F51]/20">
@@ -35,19 +23,12 @@ function LoginPageContent() {
           </p>
         </div>
 
-        {/* Message d'info/erreur */}
-        {errorMessage && (
-          <div className="mb-6 bg-[#2A9D8F]/10 border border-[#2A9D8F]/30 text-[#2C3E50] px-4 py-3 rounded-xl">
-            <p className="text-sm font-medium">{errorMessage}</p>
-          </div>
-        )}
-
         {/* Formulaire */}
         <form className="space-y-6">
           <div className="space-y-5">
             <div>
-              <label
-                htmlFor="email"
+              <label 
+                htmlFor="email" 
                 className="block text-xs font-bold uppercase text-[#47627D] tracking-wider mb-2 ml-1"
               >
                 Adresse Email
@@ -64,8 +45,8 @@ function LoginPageContent() {
             </div>
             <div>
               <div className="flex justify-between items-center mb-2 ml-1">
-                <label
-                  htmlFor="password"
+                <label 
+                  htmlFor="password" 
                   className="block text-xs font-bold uppercase text-[#47627D] tracking-wider"
                 >
                   Mot de passe
@@ -96,7 +77,7 @@ function LoginPageContent() {
             >
               Se connecter
             </button>
-
+            
             <div className="relative flex py-2 items-center">
               <div className="flex-grow border-t border-[#FDF6E3]"></div>
               <span className="flex-shrink-0 mx-4 text-xs text-[#47627D]/50 uppercase font-bold">Ou</span>
@@ -112,22 +93,10 @@ function LoginPageContent() {
           </div>
         </form>
       </div>
-
+      
       <p className="mt-8 text-center text-xs text-[#47627D]/60 max-w-xs leading-relaxed">
         En vous connectant, vous acceptez nos conditions d'utilisation et notre politique de confidentialité.
       </p>
     </div>
-  );
-}
-
-export default function LoginPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-[#FDF6E3] flex items-center justify-center">
-        <div className="text-[#2C3E50]">Chargement...</div>
-      </div>
-    }>
-      <LoginPageContent />
-    </Suspense>
-  );
+  )
 }

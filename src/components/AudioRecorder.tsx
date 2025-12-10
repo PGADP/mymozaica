@@ -1,16 +1,19 @@
 'use client'
 import { useReactMediaRecorder } from "react-media-recorder";
-import { Mic, Square, Loader2 } from "lucide-react";
-import { useEffect } from "react";
+import { Mic, Square } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 export default function AudioRecorder({ onAudioReady }: { onAudioReady: (blob: Blob) => void }) {
   const { status, startRecording, stopRecording, mediaBlobUrl } = useReactMediaRecorder({ audio: true });
+  const processedUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (status === "stopped" && mediaBlobUrl) {
+    // Ne traiter que si on a une nouvelle URL et qu'elle n'a pas déjà été traitée
+    if (status === "stopped" && mediaBlobUrl && mediaBlobUrl !== processedUrlRef.current) {
+      processedUrlRef.current = mediaBlobUrl;
       fetch(mediaBlobUrl).then(r => r.blob()).then(onAudioReady);
     }
-  }, [status, mediaBlobUrl, onAudioReady]);
+  }, [status, mediaBlobUrl]);
 
   const isRecording = status === "recording";
 

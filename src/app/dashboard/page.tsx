@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { Play, Lock, Book, Star, RotateCcw } from "lucide-react";
+import Header from "@/components/dashboard/Header";
+import { GenerateBookButton } from "@/components/dashboard/GenerateBookButton";
 
 // DÉFINITION DES ÈRES (Secours)
 const DEFAULT_ERAS = [
@@ -46,19 +48,29 @@ async function ensureSessionsExist(userId: string) {
     const m = today.getMonth() - birthDate.getMonth();
     if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
 
-    const sessions = eras.map((era: any) => {
-      let status = 'locked';
-      const endAge = era.end_age || 100;
-      if (age >= endAge) status = 'available';
-      else if (age >= era.start_age && age < endAge) status = 'in_progress';
-      
-      return {
-        user_id: userId,
-        era_id: era.id,
-        status: status,
-        current_summary: `Début du chapitre : ${era.label}`
-      };
-    });
+    // Filtrer les ères selon l'âge actuel : ne créer QUE celles jusqu'à l'âge actuel
+    const relevantEras = eras
+      .sort((a: any, b: any) => a.order - b.order)
+      .filter((era: any) => era.start_age <= age); // Ne garder que les ères déjà vécues ou en cours
+
+    const sessions = relevantEras.map((era: any, index: number) => {
+        // Logique de déverrouillage :
+        // - Première ère (0-5 ans) : unlocked (puis deviendra in_progress au démarrage)
+        // - Toutes les autres : locked (se débloquent après complétion de la précédente)
+        let status: string;
+        if (index === 0) {
+          status = 'unlocked'; // Première ère accessible
+        } else {
+          status = 'locked'; // Verrouillée jusqu'à complétion de la précédente
+        }
+
+        return {
+          user_id: userId,
+          era_id: era.id,
+          status: status,
+          current_summary: `Prêt à commencer : ${era.label}`
+        };
+      });
     
     await supabaseAdmin.from('chat_sessions').insert(sessions);
   }
@@ -68,6 +80,13 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
+
+  // Récupérer le profil pour le Header
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('email, first_name, last_name')
+    .eq('id', user.id)
+    .single();
 
   // Appel bloquant pour garantir les données avant affichage
   await ensureSessionsExist(user.id);
@@ -83,72 +102,194 @@ export default async function DashboardPage() {
   const progressPercent = Math.round(((sessions?.filter(s => s.status === 'completed').length || 0) / (sessions?.length || 1)) * 100);
 
   return (
-    <div className="min-h-screen bg-[#FDF6E3] text-[#2C3E50] font-sans pb-24">
-      
-      {/* 1. FRISE (Top) */}
-      <div className="bg-white/80 backdrop-blur-md border-b border-[#E76F51]/10 sticky top-0 z-40 py-6 shadow-sm">
+    <div className="min-h-screen bg-[#FDF6E3] text-[#2C3E50] font-sans">
+
+      {/* HEADER */}
+      <Header user={{
+        email: profile?.email || user.email || '',
+        first_name: profile?.first_name,
+        last_name: profile?.last_name
+      }} />
+
+      {/* 1. FRISE CHRONOLOGIQUE (Timeline) */}
+      <div className="bg-gradient-to-b from-white to-white/95 backdrop-blur-md border-b border-[#E76F51]/10 py-8 shadow-sm">
         <div className="max-w-full overflow-x-auto no-scrollbar px-8">
-          <div className="flex items-center gap-12 min-w-max mx-auto justify-start md:justify-center">
+          <div className="flex items-center gap-16 min-w-max mx-auto justify-start md:justify-center">
             {timeline.length > 0 ? timeline.map((session, index) => {
               const isActive = session.status === 'in_progress';
               const isLocked = session.status === 'locked';
               const isDone = session.status === 'completed';
-              
+
               return (
                 <div key={session.id} className="relative group">
+                  {/* Ligne de connexion entre les ères */}
                   {index < timeline.length - 1 && (
-                    <div className={`absolute top-8 left-16 w-12 h-1 -z-10 ${isLocked ? 'bg-gray-200' : 'bg-[#E76F51]/30'}`}></div>
+                    <div className={`absolute top-10 left-20 w-16 h-0.5 transition-all duration-300 ${
+                      isLocked ? 'bg-gray-200' :
+                      isDone ? 'bg-gradient-to-r from-[#2A9D8F] to-[#2A9D8F]/50' :
+                      'bg-gradient-to-r from-[#E9C46A] to-[#E9C46A]/30'
+                    }`}></div>
                   )}
-                  <Link href={!isLocked ? `/dashboard/interview/${session.id}` : '#'} className={`flex flex-col items-center gap-3 transition-all ${isActive ? 'scale-110' : 'hover:scale-105'} ${isLocked ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
-                    <div className={`w-16 h-16 rounded-full flex items-center justify-center border-4 shadow-lg ${
-                      isActive ? 'bg-white border-[#E76F51] text-[#E76F51]' :
-                      isDone ? 'bg-[#2A9D8F] border-[#2A9D8F] text-white' :
-                      'bg-[#FDF6E3] border-[#E9C46A] text-[#2C3E50]'
-                    }`}>
-                      {isLocked ? <Lock size={20}/> : <span className="font-serif font-bold text-lg">{index+1}</span>}
+
+                  <Link
+                    href={!isLocked ? `/dashboard/interview/${session.id}` : '#'}
+                    className={`flex flex-col items-center gap-4 transition-all duration-300 ${
+                      isActive ? 'scale-110 -translate-y-1' : 'hover:scale-105 hover:-translate-y-0.5'
+                    } ${isLocked ? 'opacity-40 grayscale cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    {/* Badge numéro/état */}
+                    <div className="relative">
+                      <div className={`w-20 h-20 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${
+                        isActive
+                          ? 'bg-white border-[#E76F51] text-[#E76F51] shadow-xl shadow-[#E76F51]/30 ring-4 ring-[#E76F51]/10'
+                          : isDone
+                          ? 'bg-gradient-to-br from-[#2A9D8F] to-[#238276] border-[#2A9D8F] text-white shadow-xl shadow-[#2A9D8F]/20'
+                          : 'bg-gradient-to-br from-[#FDF6E3] to-[#F5EDD3] border-[#E9C46A] text-[#2C3E50] shadow-lg group-hover:shadow-xl group-hover:border-[#E76F51]'
+                      }`}>
+                        {isLocked ? (
+                          <Lock size={22} className="opacity-60" />
+                        ) : isDone ? (
+                          <Star size={22} fill="currentColor" />
+                        ) : (
+                          <span className="font-serif font-bold text-xl">{index + 1}</span>
+                        )}
+                      </div>
+
+                      {/* Indicateur "En cours" */}
+                      {isActive && (
+                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-[#E76F51] rounded-full border-2 border-white animate-pulse"></div>
+                      )}
                     </div>
-                    <div className="text-center">
-                      <p className="text-xs font-bold uppercase tracking-wider">{session.eras.label}</p>
-                      <p className="text-[10px] text-[#47627D]/60">{session.eras.start_age}-{session.eras.end_age} ans</p>
+
+                    {/* Labels */}
+                    <div className="text-center max-w-[120px]">
+                      <p className={`text-xs font-bold uppercase tracking-wider mb-1 transition-colors ${
+                        isActive ? 'text-[#E76F51]' : isDone ? 'text-[#2A9D8F]' : 'text-[#2C3E50] group-hover:text-[#E76F51]'
+                      }`}>
+                        {session.eras.label}
+                      </p>
+                      <p className="text-[10px] text-[#47627D]/70">
+                        {session.eras.start_age}-{session.eras.end_age} ans
+                      </p>
                     </div>
                   </Link>
                 </div>
               );
             }) : (
-              <div className="flex items-center gap-2 text-[#E76F51]">
-                <RotateCcw className="animate-spin" /> Initialisation... (Rafraîchissez dans 2s)
+              <div className="flex items-center gap-3 text-[#E76F51] py-4">
+                <RotateCcw className="animate-spin" size={20} />
+                <span className="text-sm font-medium">Initialisation de votre fresque...</span>
               </div>
             )}
           </div>
         </div>
       </div>
 
-      <main className="max-w-xl mx-auto px-6 mt-10 space-y-12">
-        {/* 2. CARTE ACTION */}
+      <main className="max-w-3xl mx-auto px-6 mt-12 pb-24 space-y-8">
+        {/* 2. CARTE ACTION PRINCIPALE */}
         {currentSession && (
           <section className="animate-in slide-in-from-bottom-4 fade-in duration-700">
-            <div className="bg-white rounded-[2rem] p-8 shadow-xl border border-[#E76F51]/10 text-center relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#2A9D8F] via-[#E76F51] to-[#E9C46A]"></div>
-              <h1 className="text-3xl font-serif font-bold text-[#2C3E50] mb-2 mt-2">{currentSession.eras.label}</h1>
-              <p className="text-sm text-[#47627D] mb-6 line-clamp-2 px-4">"{currentSession.eras.description}"</p>
-              <Link href={`/dashboard/interview/${currentSession.id}`} className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-[#E76F51] text-white font-bold rounded-xl shadow-lg hover:bg-[#D65D40] transition-colors">
-                <Play fill="currentColor" size={18} />
-                <span>Reprendre le fil</span>
+            <div className="bg-gradient-to-br from-white via-white to-[#FDF6E3]/30 rounded-[2rem] p-10 shadow-2xl border border-[#E76F51]/10 text-center relative overflow-hidden group hover:shadow-3xl transition-all duration-300">
+              {/* Barre décorative du haut */}
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#2A9D8F] via-[#E76F51] to-[#E9C46A] group-hover:h-3 transition-all duration-300"></div>
+
+              {/* Badge "En cours" */}
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#E76F51]/10 text-[#E76F51] rounded-full text-xs font-bold uppercase tracking-wider mb-6">
+                <div className="w-2 h-2 bg-[#E76F51] rounded-full animate-pulse"></div>
+                Ère en cours
+              </div>
+
+              {/* Titre de l'ère */}
+              <h1 className="text-4xl md:text-5xl font-serif font-bold text-[#2C3E50] mb-4 leading-tight">
+                {currentSession.eras.label}
+              </h1>
+
+              {/* Description */}
+              <p className="text-base text-[#47627D] mb-8 max-w-md mx-auto leading-relaxed">
+                {currentSession.eras.description}
+              </p>
+
+              {/* CTA Button */}
+              <Link
+                href={`/dashboard/interview/${currentSession.id}`}
+                className="inline-flex items-center justify-center gap-3 px-8 py-5 bg-gradient-to-r from-[#E76F51] to-[#D65D40] text-white font-bold text-lg rounded-2xl shadow-2xl shadow-[#E76F51]/30 hover:shadow-3xl hover:shadow-[#E76F51]/40 hover:scale-105 transition-all duration-300 group"
+              >
+                <Play fill="currentColor" size={20} className="group-hover:scale-110 transition-transform" />
+                <span>Reprendre le fil de votre histoire</span>
               </Link>
+
+              {/* Statistiques rapides */}
+              <div className="mt-8 pt-6 border-t border-[#FDF6E3] flex justify-center gap-8">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-[#2A9D8F]">{timeline.filter(s => s.status === 'completed').length}</p>
+                  <p className="text-xs text-[#47627D] uppercase tracking-wider">Ères complétées</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-[#E9C46A]">{timeline.filter(s => s.status !== 'locked').length}</p>
+                  <p className="text-xs text-[#47627D] uppercase tracking-wider">Ères débloquées</p>
+                </div>
+              </div>
             </div>
           </section>
         )}
-        
-        {/* 3. LIVRE */}
-        <section className="bg-white p-6 rounded-3xl border border-[#2C3E50]/5 opacity-70 grayscale">
-            <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-[#2C3E50] text-white rounded-lg"><Book size={20}/></div>
-                <h3 className="font-bold text-[#2C3E50]">Votre Livre</h3>
+
+        {/* 3. SECTION LIVRE - Plus moderne */}
+        <section className="relative">
+          <div className={`bg-white rounded-[2rem] p-8 shadow-xl border border-[#2C3E50]/5 relative overflow-hidden transition-all duration-300 ${
+            progressPercent === 100 ? 'opacity-100' : 'opacity-60'
+          }`}>
+            {/* Overlay si verrouillé */}
+            {progressPercent < 100 && (
+              <div className="absolute inset-0 bg-gradient-to-br from-[#FDF6E3]/80 to-[#FDF6E3]/60 backdrop-blur-[2px] z-10 flex items-center justify-center">
+                <div className="text-center px-6">
+                  <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                    <Lock size={28} className="text-[#47627D]" />
+                  </div>
+                  <p className="font-bold text-[#2C3E50] text-lg mb-2">Livre verrouillé</p>
+                  <p className="text-sm text-[#47627D]">
+                    Complétez toutes les ères pour déverrouiller votre livre
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Contenu */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className="p-3 bg-gradient-to-br from-[#2C3E50] to-[#1A252F] text-white rounded-2xl shadow-lg">
+                <Book size={24} />
+              </div>
+              <div>
+                <h3 className="text-2xl font-serif font-bold text-[#2C3E50]">Votre Livre de Vie</h3>
+                <p className="text-sm text-[#47627D]">La compilation de votre histoire</p>
+              </div>
             </div>
-            <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden mb-2">
-                <div className="h-full bg-[#E76F51]" style={{ width: `${progressPercent}%` }}></div>
+
+            {/* Barre de progression améliorée */}
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm font-medium">
+                <span className="text-[#47627D]">Progression globale</span>
+                <span className="text-[#2A9D8F] font-bold">{progressPercent}%</span>
+              </div>
+              <div className="w-full h-4 bg-[#FDF6E3] rounded-full overflow-hidden shadow-inner">
+                <div
+                  className="h-full bg-gradient-to-r from-[#2A9D8F] via-[#2A9D8F] to-[#238276] transition-all duration-500 rounded-full relative overflow-hidden"
+                  style={{ width: `${progressPercent}%` }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer"></div>
+                </div>
+              </div>
+              <p className="text-xs text-[#47627D] text-center">
+                {progressPercent === 100
+                  ? '✨ Votre livre est prêt à être téléchargé !'
+                  : `Encore ${timeline.filter(s => s.status !== 'completed').length} ères à compléter`}
+              </p>
             </div>
-            <p className="text-xs text-gray-400 text-center">Verrouillé jusqu'à 100%</p>
+
+            {/* Bouton générer mon livre (si 100%) */}
+            {progressPercent === 100 && (
+              <GenerateBookButton />
+            )}
+          </div>
         </section>
       </main>
     </div>

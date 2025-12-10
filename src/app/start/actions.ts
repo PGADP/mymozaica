@@ -62,8 +62,8 @@ export async function signupWithProfile(formData: FormData) {
     });
 
     if (existingProfile) {
-      console.error("❌ Email déjà utilisé (profil existe):", existingProfile);
-      redirect(`/start?error=${encodeURIComponent('Cet email est déjà utilisé. Connectez-vous ou utilisez un autre email.')}`);
+      console.log("ℹ️ Email existe déjà, redirection vers login:", existingProfile.email);
+      redirect(`/login?error=${encodeURIComponent('Ce compte existe déjà. Connectez-vous avec votre mot de passe.')}`);
     }
 
     // Vérifier aussi dans auth.users

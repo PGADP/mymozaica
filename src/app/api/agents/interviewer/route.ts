@@ -36,6 +36,7 @@ export async function POST(req: Request) {
   const messagesCount = history?.length || 0;
   const isGettingLong = messagesCount > 15;
   const isStart = userMessage === "START_SESSION_HIDDEN_PROMPT" || messagesCount === 0;
+  const isRegenerate = userMessage === "REGENERATE_QUESTION_SAME_THEME";
 
   // 4. PRÉPARATION DU PROMPT
   const profile = session.profiles || {};
@@ -48,6 +49,17 @@ export async function POST(req: Request) {
     ?.filter((m: any) => m.role !== 'system')
     .map((m: any) => `${m.role === 'user' ? 'AUTEUR' : 'BIOGRAPHE'}: ${m.content}`)
     .join('\n');
+
+  // 4.5. DÉTECTION DE RÉPÉTITION
+  // Analyser les 3 derniers échanges pour détecter si on insiste trop sur le même sujet
+  const lastThreeMessages = history?.slice(-6) || []; // 6 messages = 3 échanges Q/R
+  const lastTopics = lastThreeMessages
+    .filter((m: any) => m.role === 'assistant')
+    .map((m: any) => m.content.toLowerCase());
+
+  // Détection simple : si les 2 dernières questions contiennent les mêmes mots-clés
+  const hasSameTopic = lastTopics.length >= 2 &&
+    lastTopics[lastTopics.length - 1].includes(lastTopics[lastTopics.length - 2].substring(0, 20));
 
   // 5. SYSTEM PROMPT (VERSION V1 - OPTIMISÉE FAITS)
   const systemPrompt = `
@@ -63,6 +75,12 @@ export async function POST(req: Request) {
     TA MISSION :
     Analyse la dernière réponse pour déterminer la prochaine étape.
 
+    ${hasSameTopic ? `
+    ⚠️ ALERTE RÉPÉTITION : Les 2 dernières questions portaient sur le même sujet.
+    → OBLIGATION : Pose une question sur UN ASPECT TOTALEMENT DIFFÉRENT de cette période de vie.
+    → Ne reviens PAS sur ce qui vient d'être discuté.
+    ` : ""}
+
     1. **Critères de fin** :
        - Si les points clés sont couverts avec détails factuels OU si l'utilisateur tourne en rond.
        - DÉCIDE DE FINIR (is_finished: true).
@@ -75,6 +93,10 @@ export async function POST(req: Request) {
        - Creuse les événements précis, conséquences, dialogues.
        - Focus sur le "Comment" et "Pourquoi".
 
+    4. **Règle anti-répétition** :
+       - Si un sujet a reçu 2+ questions consécutives, PASSE À AUTRE CHOSE.
+       - Privilégie : relations, lieux de vie, activités, moments marquants différents.
+
     INTERDICTIONS STRICTES :
     - NE pose JAMAIS de questions génériques ("raconte une anecdote").
     - NE pose JAMAIS de questions sur : [${redFlags.join(', ')}].
@@ -85,21 +107,28 @@ export async function POST(req: Request) {
     - Reprends EXACTEMENT les faits de la dernière réponse.
     - ${isGettingLong ? "⚠️ Le sujet s'étire. Pose une question de conclusion." : "Explore en profondeur."}
     - ${isStart ? "C'est le début. Pose une question d'ouverture simple sur le début de cette période." : ""}
+    - ${isRegenerate ? "⚠️ L'utilisateur veut une question différente. Pose une question sur UN AUTRE ASPECT du même thème, sans répéter la question précédente." : ""}
 
     FORMAT DE SORTIE JSON STRICT :
     {
-      "is_finished": boolean, 
+      "is_finished": boolean,
       "question": string | null
     }
   `;
 
   try {
     // 6. APPEL MISTRAL
+    const userPrompt = isStart
+      ? "Commence l'entretien."
+      : isRegenerate
+        ? "Pose une question sur UN AUTRE ASPECT du même thème (vie durant cette période). Ne répète pas la question précédente."
+        : `Réponse auteur : "${userMessage}"`;
+
     const chatResponse = await mistral.chat.complete({
       model: 'mistral-large-latest',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: isStart ? "Commence l'entretien." : `Réponse auteur : "${userMessage}"` }
+        { role: 'user', content: userPrompt }
       ],
       responseFormat: { type: 'json_object' },
       temperature: 0.2, // Très bas pour respecter la logique V1
@@ -140,6 +169,20 @@ export async function POST(req: Request) {
         role: 'assistant',
         content: aiQuestion
       });
+
+      // 9. DÉCLENCHER L'ANALYSTE EN ARRIÈRE-PLAN (fire & forget)
+      // Déclencher dès la première réponse utilisateur (pas au démarrage)
+      if (!isStart && !isRegenerate) {
+        // Ne pas attendre la réponse pour ne pas bloquer l'utilisateur
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3003';
+        fetch(`${baseUrl}/api/agents/analyst`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId }),
+        }).catch(err => console.error("❌ Erreur appel Analyste:", err));
+
+        console.log("🔍 Analyste déclenché en arrière-plan pour session", sessionId);
+      }
     } else {
         await supabase.from('chat_sessions').update({ status: 'completed' }).eq('id', sessionId);
     }
