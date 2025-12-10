@@ -115,7 +115,42 @@ export async function signupWithProfile(formData: FormData) {
     console.log("✅ User Auth créé:", userId);
 
     // ====================================
-    // 4. CRÉATION DU PROFIL (table profiles)
+    // 4. VÉRIFICATION FINALE : Le profil existe-t-il avec cet ID ?
+    // ====================================
+    console.log("🔍 Vérification finale: profil avec ID:", userId);
+
+    const { data: existingProfileById, error: checkError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, email, created_at')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error("❌ Erreur lors de la vérification du profil:", checkError);
+    }
+
+    if (existingProfileById) {
+      console.error("❌ Un profil existe déjà avec cet ID:", existingProfileById);
+      console.log("🧹 Tentative de suppression du profil orphelin...");
+
+      // Supprimer le profil orphelin
+      const { error: deleteError } = await supabaseAdmin
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+
+      if (deleteError) {
+        console.error("❌ Impossible de supprimer le profil orphelin:", deleteError);
+        // Supprimer au moins l'auth user qu'on vient de créer
+        await supabaseAdmin.auth.admin.deleteUser(userId);
+        redirect(`/start?error=${encodeURIComponent('Conflit de données. Veuillez réessayer.')}`);
+      }
+
+      console.log("✅ Profil orphelin supprimé, création d'un nouveau...");
+    }
+
+    // ====================================
+    // 5. CRÉATION DU PROFIL (table profiles)
     // ====================================
     console.log("➡️ Création profil pour user_id:", userId);
 
@@ -136,15 +171,26 @@ export async function signupWithProfile(formData: FormData) {
 
     if (profileError) {
       console.error("❌ Erreur création profil:", profileError.message);
+      console.error("❌ Détails complets:", JSON.stringify(profileError, null, 2));
+
       // Rollback: Supprimer le user Auth créé
       await supabaseAdmin.auth.admin.deleteUser(userId);
-      redirect(`/start?error=Erreur création profil: ${profileError.message}`);
+
+      // Message d'erreur plus détaillé
+      let errorMessage = 'Erreur création profil';
+      if (profileError.message.includes('duplicate key')) {
+        errorMessage = 'Conflit de données détecté. Utilisez l\'API de diagnostic: /api/debug/check-user?email=' + encodeURIComponent(email);
+      } else {
+        errorMessage = profileError.message;
+      }
+
+      redirect(`/start?error=${encodeURIComponent(errorMessage)}`);
     }
 
     console.log("✅ Profil créé avec succès");
 
     // ====================================
-    // 5. INITIALISATION DES SESSIONS (ères)
+    // 6. INITIALISATION DES SESSIONS (ères)
     // ====================================
     console.log("➡️ Initialisation sessions pour user_id:", userId);
 
@@ -153,7 +199,7 @@ export async function signupWithProfile(formData: FormData) {
     console.log("✅ Sessions initialisées");
 
     // ====================================
-    // 6. REDIRECTION VERS PAGE DE VÉRIFICATION EMAIL
+    // 7. REDIRECTION VERS PAGE DE VÉRIFICATION EMAIL
     // ====================================
     console.log("➡️ Redirection vers page de vérification email...");
 
