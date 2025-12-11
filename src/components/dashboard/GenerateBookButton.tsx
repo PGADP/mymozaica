@@ -2,59 +2,44 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Book, Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 
 export function GenerateBookButton() {
   const router = useRouter();
   const [isGenerating, setIsGenerating] = useState(false);
-  const [currentStep, setCurrentStep] = useState<'architect' | 'writer' | null>(null);
+  const [progress, setProgress] = useState<{ step: string; current: number; total: number } | null>(null);
 
   const handleGenerateBook = async () => {
     setIsGenerating(true);
+    setProgress({ step: 'Analyse de votre histoire...', current: 0, total: 0 });
 
     try {
-      // ÉTAPE 1: ARCHITECTE (réorganisation chronologique)
-      setCurrentStep('architect');
-      console.log("🏗️ Appel de l'Architecte...");
+      // Appel de l'orchestrateur séquentiel
+      // Il fait tout : Architecte Global → (loop) Architecte Chapitre → Writer Chapitre
+      console.log("🚀 Lancement de la génération du livre...");
 
-      const architectResponse = await fetch('/api/agents/architect', {
+      const response = await fetch('/api/agents/writer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
 
-      if (!architectResponse.ok) {
-        const errorData = await architectResponse.json();
-        throw new Error(errorData.error || "Erreur lors de l'analyse architecturale");
-      }
-
-      const architectResult = await architectResponse.json();
-      console.log("✅ Architecte terminé:", architectResult);
-
-      // ÉTAPE 2: WRITER (génération des chapitres)
-      setCurrentStep('writer');
-      console.log("✍️ Appel du Writer...");
-
-      const writerResponse = await fetch('/api/agents/writer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!writerResponse.ok) {
-        const errorData = await writerResponse.json();
+      if (!response.ok) {
+        const errorData = await response.json();
         throw new Error(errorData.error || "Erreur lors de la génération du livre");
       }
 
-      const writerResult = await writerResponse.json();
-      console.log("✅ Writer terminé:", writerResult);
+      const result = await response.json();
+      console.log("✅ Livre généré:", result);
 
-      // REDIRECTION vers l'éditeur
-      router.push('/book/edit');
+      // Redirection vers l'éditeur
+      router.push('/dashboard/book');
 
     } catch (error) {
       console.error("❌ Erreur génération du livre:", error);
       alert(error instanceof Error ? error.message : "Erreur lors de la génération du livre");
+    } finally {
       setIsGenerating(false);
-      setCurrentStep(null);
+      setProgress(null);
     }
   };
 
@@ -62,19 +47,16 @@ export function GenerateBookButton() {
     <button
       onClick={handleGenerateBook}
       disabled={isGenerating}
-      className="mt-6 w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-[#E76F51] to-[#D65D40] text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-300 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
+      className="bg-white text-[#E76F51] hover:bg-[#FDF6E3] py-4 px-10 rounded-xl shadow-2xl font-bold text-lg flex items-center gap-3 transition-all hover:scale-105 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
     >
       {isGenerating ? (
         <>
-          <Loader2 size={20} className="animate-spin" />
-          <span>
-            {currentStep === 'architect' && "L'architecte réorganise votre histoire..."}
-            {currentStep === 'writer' && "Le biographe rédige vos chapitres..."}
-          </span>
+          <Loader2 size={24} className="animate-spin" />
+          <span>{progress?.step || 'Génération en cours...'}</span>
         </>
       ) : (
         <>
-          <Sparkles size={20} />
+          <Sparkles size={24} />
           <span>Générer mon livre</span>
         </>
       )}

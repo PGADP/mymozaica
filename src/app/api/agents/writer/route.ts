@@ -1,62 +1,136 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from "@/utils/supabase/server";
-import { Mistral } from '@mistralai/mistralai';
-
-const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
+import { withApiProtection, logApiUsage, getUserApiStats, MAX_BOOK_GENERATIONS } from "@/lib/api-protection";
 
 /**
- * AGENT WRITER
- * Appelé après l'Architecte
- * Lit le plan du livre (book_structure)
- * Génère les chapitres en HTML
- * Sauvegarde dans book_chapters
+ * ORCHESTRATEUR SÉQUENTIEL
+ * Point d'entrée unique pour générer le livre complet
+ *
+ * FLOW :
+ * 1. Appelle Architecte Global (crée le plan)
+ * 2. Pour chaque chapitre séquentiellement :
+ *    a. Appelle Architecte Chapitre (crée le brief)
+ *    b. Appelle Writer Chapitre (rédige le contenu)
+ * 3. Retourne le résultat final
+ *
+ * PROTECTION :
+ * - Limite de 3 générations max par utilisateur (lifetime)
+ * - Rate limiting : 1/min, 2/heure, 3/jour
+ * - Vérifie que billing_status = 'paid'
  */
 
 export async function POST(req: NextRequest) {
-  console.log("✍️ WRITER: Route appelée ! Début de la génération des chapitres");
+  console.log("🚀 ORCHESTRATEUR: Début de la génération séquentielle du livre");
 
   const supabase = await createClient();
 
+  // Récupérer les cookies pour les transmettre aux appels internes
+  const cookieHeader = req.headers.get('cookie') || '';
+
+  // Récupérer le body (peut être vide ou contenir testMode)
+  let testMode = false;
   try {
-    // 1. SÉCURITÉ
+    const body = await req.json();
+    testMode = body?.testMode === true;
+  } catch {
+    // Body vide, pas de test mode
+  }
+
+  try {
+    // 1. SÉCURITÉ - Vérification utilisateur
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
     }
 
-    console.log("📖 Writer: Génération du livre pour user", user.id);
+    // 2. PROTECTION API - Vérifier les limites
+    console.log("🛡️ Vérification des limites API...");
+    const protection = await withApiProtection(user.id, 'writer');
 
-    // 2. RÉCUPÉRER LE PLAN DE L'ARCHITECTE
-    const { data: bookStructureData } = await supabase
+    if (!protection.allowed) {
+      console.warn(`⚠️ Accès refusé pour ${user.id}: ${protection.error}`);
+
+      // Récupérer les stats pour le message d'erreur
+      const stats = await getUserApiStats(user.id);
+
+      return NextResponse.json({
+        error: protection.error,
+        stats: {
+          bookGenerationsUsed: stats.bookGenerations,
+          bookGenerationsMax: MAX_BOOK_GENERATIONS,
+          bookGenerationsRemaining: stats.bookGenerationsRemaining
+        }
+      }, { status: protection.status || 429 });
+    }
+
+    console.log(`📖 Génération du livre pour user ${user.id} ${testMode ? '(MODE TEST)' : ''}`);
+
+    // ═══════════════════════════════════════════════════════════
+    // ÉTAPE 1 : ARCHITECTE GLOBAL (Plan général du livre)
+    // ═══════════════════════════════════════════════════════════
+
+    console.log("\n🏗️ ÉTAPE 1/3 : Appel de l'Architecte Global...");
+
+    let globalPlan;
+    let totalChapters = 0;
+
+    // Vérifier si un plan existe déjà
+    const { data: existingStructure } = await supabase
       .from('book_structure')
-      .select('structure')
+      .select('global_plan, generation_status, total_chapters')
       .eq('user_id', user.id)
       .single();
 
-    if (!bookStructureData || !bookStructureData.structure) {
+    if (existingStructure?.global_plan && existingStructure.generation_status !== 'error') {
+      console.log("✅ Plan global déjà existant, réutilisation");
+      globalPlan = existingStructure.global_plan;
+      totalChapters = existingStructure.total_chapters;
+    } else {
+      // Appeler l'Architecte Global avec transmission des cookies d'auth
+      const architectResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/agents/architect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': cookieHeader
+        },
+        body: JSON.stringify({ testMode })
+      });
+
+      if (!architectResponse.ok) {
+        const errorData = await architectResponse.json();
+        console.error("❌ Erreur Architecte Global:", errorData);
+        return NextResponse.json({
+          error: "Erreur lors de la création du plan global",
+          details: errorData
+        }, { status: 500 });
+      }
+
+      const architectData = await architectResponse.json();
+      globalPlan = architectData.global_plan;
+      totalChapters = architectData.total_chapters;
+
+      console.log(`✅ Plan global créé: ${totalChapters} chapitres planifiés`);
+    }
+
+    if (!globalPlan || !globalPlan.chapters_outline || globalPlan.chapters_outline.length === 0) {
       return NextResponse.json({
-        error: "Le plan du livre n'existe pas. L'Architecte doit d'abord créer le plan.",
-        hint: "Appelez /api/agents/architect avant le Writer"
-      }, { status: 400 });
+        error: "Le plan global est invalide ou vide"
+      }, { status: 500 });
     }
 
-    const plan = bookStructureData.structure;
-    console.log(`📋 Plan récupéré: ${plan.chapters?.length || 0} chapitres à générer`);
+    // Mettre à jour le statut à "in_progress"
+    await supabase
+      .from('book_structure')
+      .update({ generation_status: 'in_progress' })
+      .eq('user_id', user.id);
 
-    if (!plan.chapters || plan.chapters.length === 0) {
-      return NextResponse.json({ error: "Le plan ne contient aucun chapitre" }, { status: 400 });
-    }
+    // ═══════════════════════════════════════════════════════════
+    // ÉTAPE 2 : GÉNÉRATION SÉQUENTIELLE CHAPITRE PAR CHAPITRE
+    // ═══════════════════════════════════════════════════════════
 
-    // 3. RÉCUPÉRER LE PROFIL UTILISATEUR (pour personnalisation)
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('first_name')
-      .eq('id', user.id)
-      .single();
+    console.log(`\n✍️ ÉTAPE 2/3 : Génération séquentielle de ${totalChapters} chapitres...`);
 
-    const userName = profile?.first_name || "l'auteur";
-
-    // 4. SUPPRIMER LES ANCIENS CHAPITRES (si régénération)
+    // Supprimer les anciens chapitres (si régénération)
     await supabase
       .from('book_chapters')
       .delete()
@@ -64,136 +138,170 @@ export async function POST(req: NextRequest) {
 
     console.log("🗑️ Anciens chapitres supprimés (si existants)");
 
-    // 5. GÉNÉRER CHAQUE CHAPITRE
     const generatedChapters = [];
 
-    for (let i = 0; i < plan.chapters.length; i++) {
-      const chapterPlan = plan.chapters[i];
+    for (let i = 0; i < totalChapters; i++) {
+      const chapterOrder = i + 1;
+      const chapterOutline = globalPlan.chapters_outline[i];
 
-      console.log(`\n📝 Génération du chapitre ${i + 1}/${plan.chapters.length}: "${chapterPlan.title}"`);
+      console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      console.log(`📝 Chapitre ${chapterOrder}/${totalChapters}: "${chapterOutline.title_suggestion}"`);
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
 
-      // Construire le prompt Writer pour ce chapitre
-      const writerPrompt = `
-Tu es un biographe littéraire professionnel. Tu dois rédiger un chapitre de livre autobiographique.
+      // Mettre à jour le current_chapter dans book_structure
+      await supabase
+        .from('book_structure')
+        .update({ current_chapter: chapterOrder })
+        .eq('user_id', user.id);
 
-INFORMATIONS SUR L'AUTEUR :
-Prénom : ${userName}
+      // ───────────────────────────────────────────────────────
+      // 2a. ARCHITECTE CHAPITRE (Crée le brief détaillé)
+      // ───────────────────────────────────────────────────────
 
-PLAN DU CHAPITRE :
-Titre : "${chapterPlan.title}"
-Période de vie : ${chapterPlan.age_range.start}-${chapterPlan.age_range.end} ans
-Introduction narrative suggérée : "${chapterPlan.narrative_intro || 'Début du chapitre'}"
+      console.log(`   🏗️ Appel Architecte Chapitre ${chapterOrder}...`);
 
-FAITS À INTÉGRER (par ordre chronologique) :
-${chapterPlan.facts?.map((f: any, idx: number) => `
-${idx + 1}. [À ${f.age} ans] ${f.content}
-   Contexte original : ${f.original_context}
-   Type : ${f.type}
-`).join('\n') || 'Aucun fait spécifique'}
-
-${chapterPlan.anachronisms_fixed?.length > 0 ? `
-ANACHRONISMES CORRIGÉS PAR L'ARCHITECTE :
-${chapterPlan.anachronisms_fixed.map((a: any) => `- ${a.fact} (déplacé de "${a.from_era}" vers "${a.to_era}") : ${a.reason}`).join('\n')}
-` : ''}
-
-TA MISSION :
-Rédige un chapitre narratif de 500-800 mots qui raconte cette période de vie.
-
-RÈGLES STRICTES :
-1. **Style littéraire** : Fluide, engageant, personnel
-2. **Narration** : 1ère personne ("Je me souviens...", "C'était...")
-3. **Intégration des faits** : TOUS les faits listés doivent apparaître naturellement
-4. **Exactitude** : Conserve EXACTEMENT les noms, lieux, dates donnés
-5. **Structure** : 3-5 paragraphes cohérents avec transitions naturelles
-6. **Chronologie** : Respecte l'ordre temporel des événements
-7. **Authenticité** : Ton personnel et introspectif, pas de clichés biographiques
-8. **Interdiction** : NE PAS inventer de détails non mentionnés dans les faits
-
-STYLE D'ÉCRITURE :
-- Phrases variées (courtes et longues)
-- Utilise des détails sensoriels quand les faits le permettent
-- Évite les formules creuses ("c'était une époque merveilleuse...")
-- Préfère le concret à l'abstrait
-- Transitions fluides entre événements
-
-FORMAT DE SORTIE JSON STRICT :
-{
-  "content": "<p>Contenu HTML formaté avec balises <strong>, <em>, etc.</p><p>Deuxième paragraphe...</p>",
-  "word_count": 750,
-  "style_notes": "Brèves notes sur les choix narratifs effectués"
-}
-
-IMPORTANT :
-- Le HTML doit être valide et propre
-- Utilise <p> pour les paragraphes
-- Utilise <strong> pour mettre en valeur (noms, lieux importants)
-- Utilise <em> pour les pensées ou émotions
-- PAS de <h1>, <h2> dans le contenu (le titre est géré séparément)
-`;
-
-      // Appel à Mistral Large pour générer le chapitre
-      const response = await mistral.chat.complete({
-        model: 'mistral-large-latest',
-        messages: [{ role: 'user', content: writerPrompt }],
-        responseFormat: { type: 'json_object' },
-        temperature: 0.4, // Un peu plus créatif que l'Architecte, mais contrôlé
+      const architectChapterResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/agents/architect/chapter`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': cookieHeader
+        },
+        body: JSON.stringify({ chapterOrder })
       });
 
-      const rawContent = response.choices?.[0].message.content;
+      if (!architectChapterResponse.ok) {
+        const errorData = await architectChapterResponse.json();
+        console.error(`❌ Erreur Architecte Chapitre ${chapterOrder}:`, errorData);
 
-      let chapterData;
-      try {
-        let clean = String(rawContent || "{}").trim();
-        if (clean.startsWith("```json")) clean = clean.substring(7);
-        if (clean.startsWith("```")) clean = clean.substring(3);
-        if (clean.endsWith("```")) clean = clean.substring(0, clean.length - 3);
-        chapterData = JSON.parse(clean.trim());
-      } catch (e) {
-        console.error("❌ Erreur parsing JSON Writer pour chapitre", i + 1, ":", rawContent);
-        chapterData = {
-          content: "<p>Erreur de génération du chapitre</p>",
-          word_count: 0
-        };
+        // Marquer comme erreur et arrêter
+        await supabase
+          .from('book_structure')
+          .update({ generation_status: 'error' })
+          .eq('user_id', user.id);
+
+        return NextResponse.json({
+          error: `Erreur lors de la création du brief du chapitre ${chapterOrder}`,
+          details: errorData
+        }, { status: 500 });
       }
 
-      console.log(`✅ Chapitre généré: ${chapterData.word_count} mots`);
+      const architectChapterData = await architectChapterResponse.json();
+      const brief = architectChapterData.brief;
 
-      // 6. SAUVEGARDER LE CHAPITRE
-      const { error: insertError } = await supabase
-        .from('book_chapters')
-        .insert({
-          user_id: user.id,
-          era_id: chapterPlan.original_era_ids?.[0] || null, // Référence à la première ère originale
-          chapter_order: chapterPlan.order,
-          title: chapterPlan.title,
-          content: chapterData.content
-        });
+      console.log(`   ✅ Brief créé: ${brief.facts_to_integrate?.length || 0} faits à intégrer`);
 
-      if (insertError) {
-        console.error("❌ Erreur insertion chapitre:", insertError);
-      } else {
-        console.log(`💾 Chapitre ${chapterPlan.order} sauvegardé`);
-        generatedChapters.push({
-          order: chapterPlan.order,
-          title: chapterPlan.title,
-          word_count: chapterData.word_count
-        });
+      // ───────────────────────────────────────────────────────
+      // 2b. WRITER CHAPITRE (Rédige le contenu)
+      // ───────────────────────────────────────────────────────
+
+      console.log(`   ✍️ Appel Writer Chapitre ${chapterOrder}...`);
+
+      const writerChapterResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/agents/writer/chapter`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cookie': cookieHeader
+        },
+        body: JSON.stringify({ chapterOrder })
+      });
+
+      if (!writerChapterResponse.ok) {
+        const errorData = await writerChapterResponse.json();
+        console.error(`❌ Erreur Writer Chapitre ${chapterOrder}:`, errorData);
+
+        // Marquer comme erreur et arrêter
+        await supabase
+          .from('book_structure')
+          .update({ generation_status: 'error' })
+          .eq('user_id', user.id);
+
+        return NextResponse.json({
+          error: `Erreur lors de la rédaction du chapitre ${chapterOrder}`,
+          details: errorData
+        }, { status: 500 });
       }
+
+      const writerChapterData = await writerChapterResponse.json();
+      const chapter = writerChapterData.chapter;
+
+      console.log(`   ✅ Chapitre rédigé: ${chapter.word_count} mots`);
+      console.log(`   💾 Chapitre ${chapterOrder} sauvegardé`);
+
+      generatedChapters.push({
+        order: chapterOrder,
+        title: chapter.title,
+        word_count: chapter.word_count,
+        facts_integrated: chapter.facts_integrated_count
+      });
     }
 
-    console.log(`\n🎉 Génération terminée: ${generatedChapters.length} chapitres créés`);
+    // ═══════════════════════════════════════════════════════════
+    // ÉTAPE 3 : FINALISATION
+    // ═══════════════════════════════════════════════════════════
+
+    console.log("\n✅ ÉTAPE 3/3 : Finalisation...");
+
+    // Marquer la génération comme terminée
+    await supabase
+      .from('book_structure')
+      .update({
+        generation_status: 'completed',
+        current_chapter: totalChapters
+      })
+      .eq('user_id', user.id);
+
+    console.log(`\n🎉 GÉNÉRATION TERMINÉE: ${generatedChapters.length} chapitres créés avec succès`);
+
+    // Calculer les stats finales
+    const totalWords = generatedChapters.reduce((sum, ch) => sum + (ch.word_count || 0), 0);
+    const totalFacts = generatedChapters.reduce((sum, ch) => sum + (ch.facts_integrated || 0), 0);
+
+    // 📊 Logger le succès de la génération
+    await logApiUsage(user.id, 'writer', true, totalWords);
+    console.log("📊 Usage API loggé avec succès");
+
+    // Récupérer les stats mises à jour
+    const updatedStats = await getUserApiStats(user.id);
 
     return NextResponse.json({
       success: true,
-      chapters_count: generatedChapters.length,
+      message: "Livre généré avec succès",
+      stats: {
+        chapters_count: generatedChapters.length,
+        total_words: totalWords,
+        total_facts_integrated: totalFacts,
+        anachronisms_fixed: globalPlan.anachronisms_detected?.length || 0
+      },
       chapters: generatedChapters,
-      message: "Livre généré avec succès par le Writer"
+      usage: {
+        bookGenerationsUsed: updatedStats.bookGenerations,
+        bookGenerationsRemaining: updatedStats.bookGenerationsRemaining,
+        bookGenerationsMax: MAX_BOOK_GENERATIONS
+      }
     });
 
   } catch (error) {
-    console.error('❌ Erreur Writer:', error);
+    console.error('❌ ERREUR ORCHESTRATEUR:', error);
+
+    // Marquer comme erreur dans la DB
+    try {
+      const supabase = await createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase
+          .from('book_structure')
+          .update({ generation_status: 'error' })
+          .eq('user_id', user.id);
+      }
+    } catch (e) {
+      // Ignore les erreurs de marquage
+    }
+
     return NextResponse.json(
-      { error: 'Erreur lors de la génération du livre', details: error instanceof Error ? error.message : 'Erreur inconnue' },
+      {
+        error: 'Erreur lors de la génération du livre',
+        details: error instanceof Error ? error.message : 'Erreur inconnue'
+      },
       { status: 500 }
     );
   }

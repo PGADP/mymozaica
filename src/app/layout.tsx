@@ -1,11 +1,18 @@
 import type { Metadata } from "next";
-import { Inter, Playfair_Display, Crimson_Text } from "next/font/google";
-import "./globals.css"; // ⚠️ CETTE LIGNE EST CRUCIALE
+import { Abhaya_Libre, Roboto } from "next/font/google";
+import "./globals.css";
 
 // Configuration des polices
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-playfair" });
-const crimson = Crimson_Text({ weight: ["400", "600"], subsets: ["latin"], variable: "--font-crimson" });
+const abhayaLibre = Abhaya_Libre({
+  weight: ["400", "500", "600", "700", "800"],
+  subsets: ["latin"],
+  variable: "--font-heading"
+});
+const roboto = Roboto({
+  weight: ["300", "400", "500", "700"],
+  subsets: ["latin"],
+  variable: "--font-body"
+});
 
 export const metadata: Metadata = {
   title: "My Mozaïca - Votre biographie",
@@ -19,7 +26,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fr">
-      <body className={`${inter.variable} ${playfair.variable} ${crimson.variable} font-sans antialiased bg-[#FDF6E3] text-[#2C3E50]`}>
+      <body className={`${abhayaLibre.variable} ${roboto.variable} font-body antialiased bg-bg-main text-text-main`}>
         {children}
       </body>
     </html>

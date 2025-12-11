@@ -2,22 +2,148 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Configuration globale */
+/* Configuration globale - My Mozaica Design System */
 :root {
-  --background: #FDF6E3;
-  --foreground: #2C3E50;
-  --font-inter: 'Inter', sans-serif;
-  --font-playfair: 'Playfair Display', serif;
-  --font-crimson: 'Crimson Text', serif;
+  /* Couleurs principales */
+  --bg-main: #FDF6E3;
+  --bg-card: #FFFFFF;
+  --text-main: #2C3E50;
+  --text-muted: #47627D;
+  --border-ui: #E5E7EB;
+
+  /* Couleurs d'accent */
+  --primary: #E76F51;
+  --primary-hover: #D65D40;
+  --secondary: #2A9D8F;
+  --secondary-hover: #1F7A6F;
+  --accent: #E9C46A;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg-main);
+  color: var(--text-main);
 }
 
-/* Utilitaires personnalisés pour les scrollbars */
+/* Classes utilitaires personnalisées */
+@layer components {
+  /* Bouton principal */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background-color: #E76F51;
+    color: white;
+    font-family: var(--font-heading), serif;
+    font-weight: 600;
+    border-radius: 0.75rem;
+    transition: all 0.2s;
+  }
+
+  .btn-primary:hover {
+    background-color: #D65D40;
+  }
+
+  /* Bouton secondaire */
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    background-color: #2A9D8F;
+    color: white;
+    font-family: var(--font-heading), serif;
+    font-weight: 600;
+    border-radius: 0.75rem;
+    transition: all 0.2s;
+  }
+
+  .btn-secondary:hover {
+    background-color: #1F7A6F;
+  }
+
+  /* Header glassmorphism */
+  .glass-header {
+    background-color: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-ui);
+  }
+
+  /* Carte avec hover */
+  .card-hover {
+    transition: all 0.3s;
+  }
+
+  .card-hover:hover {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    transform: translateY(-4px);
+  }
+
+  /* Shadow glow pour boutons */
+  .shadow-glow {
+    box-shadow: 0 4px 20px rgba(231, 111, 81, 0.3);
+  }
+
+  .shadow-glow:hover {
+    box-shadow: 0 8px 30px rgba(231, 111, 81, 0.4);
+  }
+
+  /* Card shadow */
+  .shadow-card {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Rounded card */
+  .rounded-card {
+    border-radius: 1rem;
+  }
+}
+
+/* Animations */
 @layer utilities {
+  .animate-in {
+    animation: animateIn 0.5s ease-out forwards;
+    opacity: 0;
+  }
+
+  .slide-in-from-bottom-10 {
+    --tw-enter-translate-y: 2.5rem;
+  }
+
+  .slide-in-from-right-10 {
+    --tw-enter-translate-x: 2.5rem;
+  }
+
+  .fade-in {
+    --tw-enter-opacity: 0;
+  }
+
+  .delay-200 {
+    animation-delay: 200ms;
+  }
+
+  .duration-700 {
+    animation-duration: 700ms;
+  }
+
+  .duration-1000 {
+    animation-duration: 1000ms;
+  }
+
+  @keyframes animateIn {
+    from {
+      opacity: var(--tw-enter-opacity, 1);
+      transform: translate(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0));
+    }
+    to {
+      opacity: 1;
+      transform: translate(0, 0);
+    }
+  }
+
+  /* Scrollbar cachée */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
