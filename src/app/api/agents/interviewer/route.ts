@@ -1,30 +1,48 @@
 import { createClient } from "@/utils/supabase/server";
 import { Mistral } from '@mistralai/mistralai';
 import { NextResponse } from 'next/server';
+import { withApiProtection, logApiUsage } from "@/lib/api-protection";
 
 const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  
-  // 1. SÉCURITÉ
+
+  // 1. SÉCURITÉ - Vérification utilisateur
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
-  const { sessionId, userMessage } = await req.json();
+  // 2. PROTECTION API - Rate limiting
+  const protection = await withApiProtection(user.id, 'interviewer');
+  if (!protection.allowed) {
+    return NextResponse.json({ error: protection.error }, { status: protection.status || 429 });
+  }
 
-  // 2. CONTEXTE (Session + Era + Profil + RedFlags)
-  const { data: session } = await supabase
+  const { sessionId, userMessage, bonusSystemPrompt } = await req.json();
+
+  // 2. CONTEXTE (Session + Era + Profil + RedFlags + Suggested Topics)
+  const { data: session, error: sessionError } = await supabase
     .from('chat_sessions')
     .select(`
       *,
-      eras (label, description, start_age, end_age),
+      eras (label, description, start_age, end_age, suggested_topics),
       profiles:user_id (first_name, bio, red_flags)
     `)
     .eq('id', sessionId)
     .single();
 
+  if (sessionError) {
+    console.error("❌ Erreur récupération session:", sessionError.message);
+  }
+
   if (!session) return NextResponse.json({ error: "Session introuvable" }, { status: 404 });
+
+  // Récupérer les sujets suggérés de l'ère (peut être null si colonne pas encore créée)
+  const suggestedTopics = session.eras?.suggested_topics || [];
+  console.log(`📋 Sujets suggérés chargés: ${suggestedTopics.length} pour ère "${session.eras?.label}"`);
+
+  // Détecter si c'est une session bonus
+  const isBonusSession = !!session.bonus_topic_id || !!bonusSystemPrompt;
 
   // 3. HISTORIQUE
   const { data: history } = await supabase
@@ -35,14 +53,22 @@ export async function POST(req: Request) {
 
   const messagesCount = history?.length || 0;
   const isGettingLong = messagesCount > 15;
+
+  // 3.5. COMPTEUR DE MOTS (pour limite de ~1h/ère = 10 000 mots)
+  const MIN_WORDS_PER_ERA = 10000;
+  const totalWords = history
+    ?.filter((m: any) => m.role === 'user')
+    .reduce((sum: number, msg: any) => sum + (msg.content?.split(/\s+/).length || 0), 0) || 0;
+  const hasReachedMinWords = totalWords >= MIN_WORDS_PER_ERA;
+  const progressPercent = Math.min(100, Math.round((totalWords / MIN_WORDS_PER_ERA) * 100));
   const isStart = userMessage === "START_SESSION_HIDDEN_PROMPT" || messagesCount === 0;
   const isRegenerate = userMessage === "REGENERATE_QUESTION_SAME_THEME";
 
   // 4. PRÉPARATION DU PROMPT
   const profile = session.profiles || {};
   const userName = profile.first_name || "l'auteur";
-  const topicLabel = session.eras.label;
-  const topicIntent = session.eras.description;
+  const topicLabel = session.eras?.label || "Sujet bonus";
+  const topicIntent = session.eras?.description || session.current_summary || "";
   const redFlags = profile.red_flags ? [profile.red_flags] : ["Aucun sujet sensible"];
 
   const previousAnswers = history
@@ -62,12 +88,55 @@ export async function POST(req: Request) {
     lastTopics[lastTopics.length - 1].includes(lastTopics[lastTopics.length - 2].substring(0, 20));
 
   // 5. SYSTEM PROMPT (VERSION V1 - OPTIMISÉE FAITS)
-  const systemPrompt = `
+  // Pour les sessions bonus, on utilise le prompt personnalisé
+  const systemPrompt = isBonusSession && bonusSystemPrompt
+    ? `${bonusSystemPrompt}
+
+    CONTEXTE BIOGRAPHIQUE CONNU : "${profile.bio || "Néant"}"
+
+    HISTORIQUE DE L'ENTRETIEN :
+    "${previousAnswers || "(Début de l'entretien)"}"
+
+    ${hasSameTopic ? `
+    ⚠️ ALERTE RÉPÉTITION : Les 2 dernières questions portaient sur le même sujet.
+    → OBLIGATION : Pose une question sur UN ASPECT TOTALEMENT DIFFÉRENT.
+    → Ne reviens PAS sur ce qui vient d'être discuté.
+    ` : ""}
+
+    RÈGLES DE FORMULATION :
+    - Une seule question par tour, claire et directe.
+    - Reprends EXACTEMENT les faits de la dernière réponse.
+    - ${isGettingLong ? "⚠️ Le sujet s'étire. Pose une question de conclusion." : "Explore en profondeur."}
+    - ${isStart ? "C'est le début. Pose une question d'ouverture chaleureuse sur ce sujet." : ""}
+    - ${isRegenerate ? "⚠️ L'utilisateur veut une question différente. Pose une question sur UN AUTRE ASPECT, sans répéter." : ""}
+
+    FORMAT DE SORTIE JSON STRICT :
+    {
+      "is_finished": boolean,
+      "question": string | null
+    }
+    `
+    : `
     Tu es un biographe professionnel interviewant ${userName}.
-    Sujet en cours : "${topicLabel}" (${session.eras.start_age}-${session.eras.end_age || "aujourd'hui"} ans)
+    Sujet en cours : "${topicLabel}" (${session.eras?.start_age || 0}-${session.eras?.end_age || "aujourd'hui"} ans)
     Objectif narratif : "${topicIntent}"
 
     CONTEXTE BIOGRAPHIQUE CONNU : "${profile.bio || "Néant"}"
+
+    ═══════════════════════════════════════════════════════════════
+    📊 PROGRESSION DE L'ÈRE : ${totalWords} mots / ${MIN_WORDS_PER_ERA} minimum (${progressPercent}%)
+    ${hasReachedMinWords
+      ? "✅ Objectif de mots atteint - tu peux envisager de conclure SI les sujets importants sont couverts."
+      : "⚠️ Continue d'explorer - objectif de mots non atteint, NE TERMINE PAS encore cette ère."}
+    ═══════════════════════════════════════════════════════════════
+
+    ${suggestedTopics.length > 0 ? `
+    📋 SUJETS IMPORTANTS À EXPLORER POUR CETTE PÉRIODE :
+    ${suggestedTopics.map((t: any, i: number) => `${i + 1}. **${t.sujet}** : ${t.description}`).join('\n    ')}
+
+    → Assure-toi d'avoir couvert PLUSIEURS de ces thèmes avant de terminer.
+    → Si un sujet n'a pas été abordé dans l'historique, pose une question dessus.
+    ` : ""}
 
     HISTORIQUE COMPLET DU SUJET :
     "${previousAnswers || "(Début de l'entretien)"}"
@@ -78,12 +147,16 @@ export async function POST(req: Request) {
     ${hasSameTopic ? `
     ⚠️ ALERTE RÉPÉTITION : Les 2 dernières questions portaient sur le même sujet.
     → OBLIGATION : Pose une question sur UN ASPECT TOTALEMENT DIFFÉRENT de cette période de vie.
-    → Ne reviens PAS sur ce qui vient d'être discuté.
+    → Regarde les sujets suggérés ci-dessus pour trouver un nouveau thème.
     ` : ""}
 
-    1. **Critères de fin** :
-       - Si les points clés sont couverts avec détails factuels OU si l'utilisateur tourne en rond.
-       - DÉCIDE DE FINIR (is_finished: true).
+    1. **Critères de fin** (TOUS doivent être remplis) :
+       - Tu as collecté AU MOINS ${MIN_WORDS_PER_ERA} mots (actuellement ${totalWords})
+       - ET tu as couvert AU MOINS 3-4 des sujets suggérés ci-dessus
+       - OU l'utilisateur demande explicitement de passer à la suite
+       - OU l'utilisateur indique clairement n'avoir aucun souvenir de cette période
+       ${!hasReachedMinWords ? `
+       ⛔ IMPORTANT : L'objectif de mots n'est PAS atteint. NE TERMINE PAS cette ère.` : ""}
 
     2. **Si réponse vide/courte** :
        - Pose une question factuelle (Qui ? Où ? Quand ?).
@@ -95,19 +168,20 @@ export async function POST(req: Request) {
 
     4. **Règle anti-répétition** :
        - Si un sujet a reçu 2+ questions consécutives, PASSE À AUTRE CHOSE.
-       - Privilégie : relations, lieux de vie, activités, moments marquants différents.
+       - Utilise la liste des sujets suggérés pour varier les thèmes.
 
     INTERDICTIONS STRICTES :
     - NE pose JAMAIS de questions génériques ("raconte une anecdote").
     - NE pose JAMAIS de questions sur : [${redFlags.join(', ')}].
     - RESPECTE scrupuleusement les noms/lieux donnés.
+    - NE TERMINE PAS l'ère avant d'avoir atteint ${MIN_WORDS_PER_ERA} mots (sauf demande explicite).
 
     RÈGLES DE FORMULATION :
     - Une seule question par tour, claire et directe.
-    - Reprends EXACTEMENT les faits de la dernière réponse.
-    - ${isGettingLong ? "⚠️ Le sujet s'étire. Pose une question de conclusion." : "Explore en profondeur."}
-    - ${isStart ? "C'est le début. Pose une question d'ouverture simple sur le début de cette période." : ""}
-    - ${isRegenerate ? "⚠️ L'utilisateur veut une question différente. Pose une question sur UN AUTRE ASPECT du même thème, sans répéter la question précédente." : ""}
+    - Ai une tonalité empathique et engageante et simple, comme un vrai biographe.
+    - ${isGettingLong && hasReachedMinWords ? "Le sujet s'étire et l'objectif est atteint. Tu peux poser une question de conclusion." : "Continue d'explorer les sujets suggérés."}
+    - ${isStart ? "C'est le début. Pose une question d'ouverture simple sur le contexte de naissance ou les figures parentales." : ""}
+    - ${isRegenerate ? "⚠️ L'utilisateur veut une question différente. Choisis un AUTRE sujet dans la liste des sujets suggérés." : ""}
 
     FORMAT DE SORTIE JSON STRICT :
     {
@@ -175,9 +249,16 @@ export async function POST(req: Request) {
       if (!isStart && !isRegenerate) {
         // Ne pas attendre la réponse pour ne pas bloquer l'utilisateur
         const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3003';
+
+        // Récupérer les cookies de la requête pour les transmettre à l'Analyste
+        const cookieHeader = req.headers.get('cookie') || '';
+
         fetch(`${baseUrl}/api/agents/analyst`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': cookieHeader, // Transmettre les cookies d'auth
+          },
           body: JSON.stringify({ sessionId }),
         }).catch(err => console.error("❌ Erreur appel Analyste:", err));
 
@@ -187,10 +268,20 @@ export async function POST(req: Request) {
         await supabase.from('chat_sessions').update({ status: 'completed' }).eq('id', sessionId);
     }
 
+    // Logger l'usage API (succès)
+    await logApiUsage(user.id, 'interviewer', true);
+
     return NextResponse.json({ reply: aiQuestion, isFinished: result.is_finished });
 
   } catch (error) {
     console.error("Erreur API:", error);
+
+    // Logger l'échec
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (currentUser) {
+      await logApiUsage(currentUser.id, 'interviewer', false, undefined, undefined, String(error));
+    }
+
     return NextResponse.json({ error: "Erreur IA" }, { status: 500 });
   }
 }

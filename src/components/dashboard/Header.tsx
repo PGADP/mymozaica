@@ -50,18 +50,18 @@ export default function Header({ user }: HeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-[#E76F51]/10 shadow-sm">
+    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-border-ui shadow-sm">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        {/* Logo */}
-        <Link href="/dashboard" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 bg-[#E76F51] rounded-xl rotate-3 group-hover:rotate-6 transition-transform flex items-center justify-center text-white font-serif font-bold text-xl shadow-lg shadow-[#E76F51]/20">
+        {/* Logo - cliquable vers la landing page */}
+        <Link href="/" className="flex items-center gap-3 group">
+          <div className="w-10 h-10 bg-primary rounded-full group-hover:scale-105 transition-transform flex items-center justify-center text-white font-heading font-bold text-xl shadow-lg shadow-primary/20">
             M
           </div>
           <div className="flex flex-col">
-            <span className="text-xl font-serif font-bold text-[#2C3E50] leading-none">
+            <span className="text-xl font-heading font-bold text-text-main leading-none">
               My Mozaïca
             </span>
-            <span className="text-xs text-[#47627D] leading-none mt-0.5">
+            <span className="text-xs text-text-muted leading-none mt-0.5">
               Votre fresque de vie
             </span>
           </div>

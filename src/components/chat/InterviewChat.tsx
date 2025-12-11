@@ -21,7 +21,19 @@ interface SessionContext {
   end_age: number;
 }
 
-export function InterviewChat({ sessionId, initialMessages = [] }: { sessionId: string, initialMessages?: any[] }) {
+interface BonusTopic {
+  id: string;
+  title: string;
+  systemPrompt: string;
+}
+
+interface InterviewChatProps {
+  sessionId: string;
+  initialMessages?: any[];
+  bonusTopic?: BonusTopic;
+}
+
+export function InterviewChat({ sessionId, initialMessages = [], bonusTopic }: InterviewChatProps) {
   const supabase = createClient();
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasStarted = useRef(false);
@@ -33,8 +45,10 @@ export function InterviewChat({ sessionId, initialMessages = [] }: { sessionId: 
   const [context, setContext] = useState<SessionContext | null>(null);
   const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
 
-  // 1. CHARGER LE CONTEXTE DE LA SESSION
+  // 1. CHARGER LE CONTEXTE DE LA SESSION (seulement pour les interviews d'ères, pas bonus)
   useEffect(() => {
+    if (bonusTopic) return; // Pas besoin de charger le contexte pour un bonus topic
+
     const loadContext = async () => {
       const { data: session } = await supabase
         .from('chat_sessions')
@@ -54,15 +68,30 @@ export function InterviewChat({ sessionId, initialMessages = [] }: { sessionId: 
     };
 
     loadContext();
-  }, [sessionId]);
+  }, [sessionId, bonusTopic]);
 
-  // 2. AUTO-START (seulement si VRAIMENT pas d'historique au chargement)
+  // 2. AUTO-START ou AUTO-CONTINUE
   useEffect(() => {
-    // On vérifie initialMessages pour éviter de redemander si l'historique existe
-    if (initialMessages.length === 0 && history.length === 0 && !isThinking && !hasStarted.current) {
+    if (hasStarted.current || isThinking) return;
+
+    // Cas 1: Pas d'historique du tout → démarrer l'interview
+    if (initialMessages.length === 0) {
       hasStarted.current = true;
       triggerAIResponse("START_SESSION_HIDDEN_PROMPT");
+      return;
     }
+
+    // Cas 2: Historique existe mais le dernier message est de l'utilisateur → générer une question
+    const lastMessage = initialMessages[initialMessages.length - 1];
+    if (lastMessage && lastMessage.role === 'user') {
+      hasStarted.current = true;
+      console.log("🔄 Dernier message = user, génération d'une nouvelle question...");
+      triggerAIResponse(lastMessage.content);
+      return;
+    }
+
+    // Cas 3: Historique existe et le dernier message est de l'assistant → tout est ok
+    hasStarted.current = true;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -76,7 +105,12 @@ export function InterviewChat({ sessionId, initialMessages = [] }: { sessionId: 
       const response = await fetch('/api/agents/interviewer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, userMessage }),
+        body: JSON.stringify({
+          sessionId,
+          userMessage,
+          // Si c'est un bonus topic, on passe le system prompt personnalisé
+          bonusSystemPrompt: bonusTopic?.systemPrompt
+        }),
       });
       if (!response.ok) throw new Error('Erreur IA');
       const data = await response.json();
@@ -150,13 +184,51 @@ export function InterviewChat({ sessionId, initialMessages = [] }: { sessionId: 
         </div>
 
         {/* CONTEXTE DE LA SESSION */}
-        {context && (
-          <div className="bg-gradient-to-r from-[#E76F51]/5 to-[#2A9D8F]/5 rounded-xl p-4 border border-[#E76F51]/10">
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles size={16} className="text-[#E76F51]" />
-              <h3 className="font-serif font-bold text-[#2C3E50]">{context.era_label}</h3>
+        {bonusTopic ? (
+          <div className="bg-gradient-to-r from-[#2A9D8F]/10 to-[#E76F51]/5 rounded-xl p-4 border border-[#2A9D8F]/20">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles size={16} className="text-[#2A9D8F]" />
+                  <h3 className="font-serif font-bold text-[#2C3E50]">{bonusTopic.title}</h3>
+                </div>
+                <p className="text-xs text-[#47627D]">Sujet bonus • Interview personnalisée</p>
+              </div>
+              {/* Bouton Régénérer dans le header */}
+              {history.length > 0 && !isThinking && (
+                <button
+                  onClick={handleRegenerateQuestion}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-[#47627D] hover:text-[#2A9D8F] hover:bg-[#2A9D8F]/10 rounded-xl transition-colors"
+                  title="Générer une autre question"
+                >
+                  <RefreshCw size={16} />
+                  <span className="hidden sm:inline">Autre question</span>
+                </button>
+              )}
             </div>
-            <p className="text-xs text-[#47627D]">{context.start_age}-{context.end_age} ans • {context.era_description}</p>
+          </div>
+        ) : context && (
+          <div className="bg-gradient-to-r from-[#E76F51]/5 to-[#2A9D8F]/5 rounded-xl p-4 border border-[#E76F51]/10">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles size={16} className="text-[#E76F51]" />
+                  <h3 className="font-serif font-bold text-[#2C3E50]">{context.era_label}</h3>
+                </div>
+                <p className="text-xs text-[#47627D]">{context.start_age}-{context.end_age} ans • {context.era_description}</p>
+              </div>
+              {/* Bouton Régénérer dans le header */}
+              {history.length > 0 && !isThinking && (
+                <button
+                  onClick={handleRegenerateQuestion}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-[#47627D] hover:text-[#E76F51] hover:bg-[#E76F51]/10 rounded-xl transition-colors"
+                  title="Générer une autre question"
+                >
+                  <RefreshCw size={16} />
+                  <span className="hidden sm:inline">Autre question</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
       </header>
@@ -172,34 +244,17 @@ export function InterviewChat({ sessionId, initialMessages = [] }: { sessionId: 
             </div>
           )}
 
-          {history.map((msg, index) => {
-            const isLastAssistantMessage = msg.role === 'assistant' && index === history.length - 1;
-
-            return (
+          {history.map((msg) => (
               <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className="flex flex-col gap-2 max-w-[85%] md:max-w-[75%]">
-                  <div className={`p-6 rounded-3xl text-lg leading-relaxed shadow-sm ${
-                    msg.role === 'user'
-                      ? 'bg-[#E76F51] text-white rounded-br-none shadow-[#E76F51]/20'
-                      : 'bg-white text-[#2C3E50] border border-white shadow-[#2C3E50]/5 rounded-bl-none'
-                  }`}>
-                    {msg.content}
-                  </div>
-
-                  {/* Bouton Régénérer pour la dernière question de l'assistant */}
-                  {isLastAssistantMessage && !isThinking && (
-                    <button
-                      onClick={handleRegenerateQuestion}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-[#47627D] hover:text-[#E76F51] hover:bg-[#FDF6E3] rounded-xl transition-colors self-start"
-                    >
-                      <RefreshCw size={16} />
-                      <span>Générer une autre question</span>
-                    </button>
-                  )}
+                <div className={`p-6 rounded-3xl text-lg leading-relaxed shadow-sm max-w-[85%] md:max-w-[75%] ${
+                  msg.role === 'user'
+                    ? 'bg-[#E76F51] text-white rounded-br-none shadow-[#E76F51]/20'
+                    : 'bg-white text-[#2C3E50] border border-white shadow-[#2C3E50]/5 rounded-bl-none'
+                }`}>
+                  {msg.content}
                 </div>
               </div>
-            );
-          })}
+          ))}
 
           {isThinking && history.length > 0 && (
             <div className="flex justify-start animate-pulse">

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from "@/utils/supabase/server";
 import { Mistral } from '@mistralai/mistralai';
+import { withApiProtection, logApiUsage } from "@/lib/api-protection";
 
 const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
 
@@ -9,12 +10,27 @@ const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY });
  * Appelé en arrière-plan après chaque échange
  * Extrait : Faits, Lieux, Noms, Dates
  * Met à jour : current_summary, topic_density
+ *
+ * PROTECTION : Rate limiting (15/min, 150/heure, 750/jour)
  */
 
 export async function POST(req: NextRequest) {
   console.log("🚨 ANALYSTE: Route appelée ! Début de l'endpoint");
 
   const supabase = await createClient();
+
+  // Vérification utilisateur
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
+  }
+
+  // Protection API - Rate limiting
+  const protection = await withApiProtection(user.id, 'analyst');
+  if (!protection.allowed) {
+    console.warn(`⚠️ Analyst bloqué pour ${user.id}: ${protection.error}`);
+    return NextResponse.json({ error: protection.error }, { status: protection.status || 429 });
+  }
 
   try {
     const { sessionId } = await req.json();
@@ -209,24 +225,30 @@ MAINTENANT, EXTRAIS LES FAITS DU TEXTE CI-DESSUS.
 
     // 5. SAUVEGARDER LES FAITS DANS LA TABLE user_facts
     if (extracted.facts && extracted.facts.length > 0) {
+      // IMPORTANT: Les colonnes de la table sont: category, value, context (pas fact_type, fact_value, fact_context)
       const factsToInsert = extracted.facts.map((fact: any) => ({
         user_id: session.user_id,
         session_id: sessionId,
         era_id: session.era_id,
-        fact_type: fact.type || 'autre',
-        fact_value: fact.value || '',
-        fact_context: fact.context || '',
+        category: fact.type || 'autre',
+        value: fact.value || '',
+        context: fact.context || '',
       }));
 
-      const { error: factsError } = await supabase
+      console.log("📊 Faits à insérer:", JSON.stringify(factsToInsert, null, 2));
+
+      const { data: insertedFacts, error: factsError } = await supabase
         .from('user_facts')
-        .insert(factsToInsert);
+        .insert(factsToInsert)
+        .select();
 
       if (factsError) {
-        console.error("❌ Erreur insertion facts:", factsError);
+        console.error("❌ Erreur insertion facts:", factsError.message, factsError.details, factsError.hint);
       } else {
-        console.log("💾 Sauvegarde de", factsToInsert.length, "faits dans user_facts");
+        console.log("💾 Sauvegarde de", insertedFacts?.length || 0, "faits dans user_facts");
       }
+    } else {
+      console.log("⚠️ Aucun fait extrait à sauvegarder");
     }
 
     // 6. METTRE À JOUR LE RÉSUMÉ ET LA DENSITÉ
@@ -274,7 +296,7 @@ MAINTENANT, EXTRAIS LES FAITS DU TEXTE CI-DESSUS.
       const currentContext = currentProfile?.whisper_context || '';
 
       // Combiner avec les nouveaux noms (sans doublons)
-      const existingNames = currentContext.split(',').map(n => n.trim()).filter(Boolean);
+      const existingNames = currentContext.split(',').map((n: string) => n.trim()).filter(Boolean);
       const newNames = [...personnes, ...lieux];
       const allNames = [...new Set([...existingNames, ...newNames])];
 
@@ -298,6 +320,189 @@ MAINTENANT, EXTRAIS LES FAITS DU TEXTE CI-DESSUS.
       }
     }
 
+    // 8. DÉTECTER LES SUJETS BONUS POTENTIELS
+    // UNIQUEMENT pour des événements VRAIMENT MAJEURS (pas les petites anecdotes)
+    const potentialBonusEvents = extracted.facts.filter((f: any) =>
+      (f.type === 'evenement' || f.type === 'activite') &&
+      // Filtrer les sujets triviaux
+      f.value && f.value.length > 10
+    );
+
+    // Critère plus strict : au moins 3 faits intéressants ET densité élevée
+    if (potentialBonusEvents.length >= 3 && (extracted.density_score || 0) >= 0.6) {
+      console.log("🔍 Analyse pour sujets bonus (critères stricts atteints)...");
+
+      const bonusDetectionPrompt = `
+Tu es un expert en biographie TRÈS SÉLECTIF. Tu ne détectes que des sujets EXCEPTIONNELS.
+
+CONTEXTE :
+L'utilisateur raconte son histoire de vie. Tu dois identifier UNIQUEMENT des sujets qui méritent VRAIMENT un chapitre dédié.
+
+FAITS DÉTECTÉS :
+${JSON.stringify(potentialBonusEvents, null, 2)}
+
+TEXTE ORIGINAL :
+${conversationText}
+
+⚠️ CRITÈRES STRICTS - Un sujet bonus DOIT être :
+1. Un événement MAJEUR qui a changé la vie de la personne (pas une simple anecdote)
+2. Quelque chose qui mérite 10+ minutes de discussion approfondie
+3. Un sujet UNIQUE et SPÉCIFIQUE (pas "mes vacances" mais "Mon été à travailler dans les vignes en Australie")
+4. Mentionné avec ÉMOTION ou IMPORTANCE évidente dans le texte
+
+❌ NE PAS CRÉER de sujet bonus pour :
+- Les activités quotidiennes banales (aller à l'école, manger, jouer)
+- Les petits incidents sans conséquence majeure
+- Les sujets déjà couverts dans l'ère chronologique actuelle
+- Les sujets vagues ou génériques
+- Les simples mentions de lieux ou personnes
+
+✅ EXEMPLES DE BONS SUJETS BONUS :
+- Un voyage à l'étranger de plusieurs semaines/mois
+- Une passion pratiquée pendant des années (instrument, sport de compétition)
+- Une rencontre qui a changé le cours de la vie
+- Un projet entrepreneurial ou professionnel majeur
+- Un événement traumatisant ou transformateur (accident grave, perte, victoire importante)
+
+CATÉGORIES :
+- voyage : Séjour significatif à l'étranger (min 2 semaines)
+- passion : Activité pratiquée sérieusement pendant des années
+- rencontre : Personne ayant fondamentalement changé la vie
+- travail : Projet professionnel d'envergure, création d'entreprise
+- evenement : Événement qui a marqué un tournant de vie
+
+FORMAT JSON :
+{
+  "bonus_topics": [
+    {
+      "title": "Titre personnel et spécifique",
+      "description": "Question engageante pour approfondir",
+      "category": "categorie",
+      "keywords": ["mot-clé1", "mot-clé2"],
+      "relevance_score": 0.9,
+      "justification": "Pourquoi ce sujet mérite un chapitre dédié"
+    }
+  ]
+}
+
+RÈGLES ABSOLUES :
+- Maximum 1 sujet bonus par analyse (être TRÈS sélectif)
+- relevance_score MINIMUM 0.85 pour être créé
+- Si rien d'exceptionnel, retourne {"bonus_topics": []}
+- Dans le DOUTE, ne crée PAS de sujet bonus
+
+RÉPONDS UNIQUEMENT EN JSON.
+`;
+
+      try {
+        const bonusResponse = await mistral.chat.complete({
+          model: 'mistral-small-latest',
+          messages: [{ role: 'user', content: bonusDetectionPrompt }],
+          responseFormat: { type: 'json_object' },
+          temperature: 0.3,
+        });
+
+        let bonusData;
+        try {
+          let cleanBonus = String(bonusResponse.choices?.[0].message.content || "{}").trim();
+          if (cleanBonus.startsWith("```json")) cleanBonus = cleanBonus.substring(7);
+          if (cleanBonus.startsWith("```")) cleanBonus = cleanBonus.substring(3);
+          if (cleanBonus.endsWith("```")) cleanBonus = cleanBonus.slice(0, -3);
+          bonusData = JSON.parse(cleanBonus.trim());
+        } catch {
+          bonusData = { bonus_topics: [] };
+        }
+
+        // Insérer les sujets bonus détectés (si pertinents et non existants)
+        if (bonusData.bonus_topics && bonusData.bonus_topics.length > 0) {
+          for (const topic of bonusData.bonus_topics) {
+            // Score minimum relevé à 0.85
+            if (topic.relevance_score >= 0.85) {
+              // Vérification de doublons AMÉLIORÉE
+              // 1. Récupérer tous les bonus topics existants de l'utilisateur
+              const { data: existingTopics } = await supabase
+                .from('bonus_topics')
+                .select('id, title, detected_keywords')
+                .eq('user_id', session.user_id);
+
+              // 2. Vérifier la similarité avec chaque topic existant
+              let isDuplicate = false;
+              const newTitleWords = topic.title.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+              const newKeywords = (topic.keywords || []).map((k: string) => k.toLowerCase());
+
+              if (existingTopics && existingTopics.length > 0) {
+                for (const existing of existingTopics) {
+                  const existingTitleWords = existing.title.toLowerCase().split(/\s+/).filter((w: string) => w.length > 3);
+                  const existingKeywords = (existing.detected_keywords || []).map((k: string) => k.toLowerCase());
+
+                  // Calculer le chevauchement des mots du titre
+                  const titleOverlap = newTitleWords.filter((w: string) => existingTitleWords.includes(w)).length;
+                  const titleSimilarity = titleOverlap / Math.max(newTitleWords.length, 1);
+
+                  // Calculer le chevauchement des keywords
+                  const keywordOverlap = newKeywords.filter((k: string) => existingKeywords.includes(k)).length;
+                  const keywordSimilarity = keywordOverlap / Math.max(newKeywords.length, 1);
+
+                  // Si plus de 50% de similarité sur le titre OU les keywords, c'est un doublon
+                  if (titleSimilarity > 0.5 || keywordSimilarity > 0.5) {
+                    console.log(`⚠️ Sujet bonus "${topic.title}" similaire à "${existing.title}" (titre: ${(titleSimilarity * 100).toFixed(0)}%, keywords: ${(keywordSimilarity * 100).toFixed(0)}%)`);
+                    isDuplicate = true;
+                    break;
+                  }
+                }
+              }
+
+              if (isDuplicate) {
+                console.log(`⏭️ Sujet bonus ignoré (doublon détecté): ${topic.title}`);
+                continue;
+              }
+
+              // Créer le prompt personnalisé pour ce sujet
+              const systemPrompt = `Tu es un biographe spécialisé dans les récits de ${topic.category}.
+
+Ton objectif : Aider l'utilisateur à raconter en détail son expérience sur le thème "${topic.title}".
+
+Ce qui a été mentionné : ${topic.keywords.join(', ')}
+
+Questions à explorer :
+- Comment cette expérience a-t-elle commencé ?
+- Quels moments marquants s'y sont produits ?
+- Quelles personnes y étaient impliquées ?
+- Quelles émotions a-t-il ressenti ?
+- Comment cette expérience l'a-t-elle changé ?
+
+Pose des questions ouvertes et encourage les détails sensoriels et émotionnels.`;
+
+              const { error: insertError } = await supabase
+                .from('bonus_topics')
+                .insert({
+                  user_id: session.user_id,
+                  title: topic.title,
+                  description: topic.description,
+                  category: topic.category,
+                  detected_from_session: sessionId,
+                  detected_keywords: topic.keywords,
+                  system_prompt: systemPrompt,
+                  status: 'available'
+                });
+
+              if (!insertError) {
+                console.log("✨ Nouveau sujet bonus créé:", topic.title);
+              } else {
+                console.error("❌ Erreur création sujet bonus:", insertError);
+              }
+            }
+          }
+        }
+      } catch (bonusError) {
+        console.error("❌ Erreur détection sujets bonus:", bonusError);
+        // Non-bloquant, on continue
+      }
+    }
+
+    // Logger l'usage API (succès)
+    await logApiUsage(user.id, 'analyst', true);
+
     return NextResponse.json({
       success: true,
       facts_count: extracted.facts.length,
@@ -307,6 +512,10 @@ MAINTENANT, EXTRAIS LES FAITS DU TEXTE CI-DESSUS.
 
   } catch (error) {
     console.error('❌ Erreur Analyst:', error);
+
+    // Logger l'échec
+    await logApiUsage(user.id, 'analyst', false, undefined, undefined, String(error));
+
     return NextResponse.json(
       { error: 'Erreur lors de l\'analyse', details: error instanceof Error ? error.message : 'Erreur inconnue' },
       { status: 500 }
