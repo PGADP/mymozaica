@@ -20,7 +20,7 @@ export async function signupWithProfile(formData: FormData) {
   const supabaseAdmin = createAdminClient();
 
   // ====================================
-  // 1. EXTRACTION DES DONNÉES DU FORMULAIRE
+  // 1. EXTRACTION DES DONNEES DU FORMULAIRE
   // ====================================
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
@@ -30,6 +30,7 @@ export async function signupWithProfile(formData: FormData) {
   const redFlagsText = formData.get("redFlags") as string || null; // Textarea
   const birthDateRaw = formData.get("birthDate") as string;
   const birthCity = formData.get("birthCity") as string;
+  const pack = formData.get("pack") as string || "pack1"; // Pack selectionne (pack1 ou pack2)
 
   // red_flags est maintenant un texte libre (textarea), pas une checkbox
   const redFlags = redFlagsText && redFlagsText.trim().length > 0 ? redFlagsText.trim() : null;
@@ -221,15 +222,34 @@ export async function signupWithProfile(formData: FormData) {
     console.log("✅ Sessions initialisées");
 
     // ====================================
-    // 7. REDIRECTION VERS PAGE DE VÉRIFICATION EMAIL
+    // 7. REDIRECTION VERS PAGE DE PAIEMENT LEMONSQUEEZY
     // ====================================
-    console.log("➡️ Redirection vers page de vérification email...");
+    console.log("➡️ Redirection vers page de paiement Lemonsqueezy...");
+    console.log("📦 Pack selectionne:", pack);
 
-    // L'utilisateur doit confirmer son email avant de payer
-    // La redirection vers Lemonsqueezy se fera APRÈS confirmation email
-    redirect('/auth/verify-email');
+    // Choisir l'URL de checkout selon le pack
+    let checkoutUrl: string | undefined;
+    if (pack === 'pack2') {
+      checkoutUrl = process.env.NEXT_PUBLIC_LEMONSQUEEZY_PACK2_URL;
+    } else {
+      checkoutUrl = process.env.NEXT_PUBLIC_LEMONSQUEEZY_PACK1_URL || process.env.NEXT_PUBLIC_LEMONSQUEEZY_CHECKOUT_URL;
+    }
 
-  } catch (error) {
+    if (checkoutUrl) {
+      const checkoutWithParams = `${checkoutUrl}?checkout[email]=${encodeURIComponent(email)}&checkout[custom][user_id]=${userId}&checkout[custom][pack_type]=${pack}`;
+      console.log("🔗 URL de checkout:", checkoutWithParams);
+      redirect(checkoutWithParams);
+    } else {
+      // Si pas de checkout URL configuree, rediriger vers le dashboard (mode dev)
+      console.log("⚠️ Pas d'URL Lemonsqueezy configuree, redirection vers dashboard");
+      redirect('/dashboard');
+    }
+
+  } catch (error: any) {
+    // IMPORTANT: redirect() lance une exception NEXT_REDIRECT, il faut la laisser passer
+    if (error?.digest?.includes('NEXT_REDIRECT')) {
+      throw error;
+    }
     console.error("❌ Erreur critique lors de l'inscription:", error);
     redirect('/start?error=Une erreur inattendue est survenue');
   }
@@ -274,24 +294,17 @@ async function initializeUserSessions(
 
   console.log("📚 Ères récupérées:", eras.length);
 
-  // Création des sessions avec statut calculé selon l'âge
-  const sessions = eras.map((era: any) => {
-    let status = 'locked'; // Par défaut, verrouillé
-    const endAge = era.end_age || 150; // 150 pour la dernière ère (sans limite)
+  // Filtrer les ères : on ne garde QUE celles où l'utilisateur a vécu
+  // Exemple: 26 ans = 0-5 ✓, 5-12 ✓, 12-21 ✓, 21-30 ✓ (on est dedans), 30-40 ✗
+  const relevantEras = eras.filter((era: any) => era.start_age < age);
 
-    // Logique de statut:
-    // - locked: L'utilisateur n'a pas encore atteint cette ère
-    // - in_progress: L'utilisateur est actuellement dans cette ère
-    // - available: L'utilisateur a dépassé cette ère (peut la revoir)
+  console.log(`📚 Ères pertinentes pour ${age} ans:`, relevantEras.map((e: any) => e.label).join(', '));
 
-    if (age >= era.start_age && age < endAge) {
-      // L'utilisateur est dans cette tranche d'âge
-      status = 'in_progress';
-    } else if (age >= endAge) {
-      // L'utilisateur a dépassé cette tranche d'âge
-      status = 'available';
-    }
-    // Sinon, reste 'locked'
+  // Création des sessions - TOUJOURS commencer par la première ère (0-5 ans)
+  // index 0 = "Petite enfance" (0-5 ans) = seule ère déverrouillée
+  const sessions = relevantEras.map((era: any, index: number) => {
+    // Seule la PREMIÈRE ère (0-5 ans) est déverrouillée, les autres sont verrouillées
+    const status = index === 0 ? 'unlocked' : 'locked';
 
     return {
       user_id: userId,
@@ -304,9 +317,8 @@ async function initializeUserSessions(
 
   console.log("📝 Sessions à créer:", sessions.length);
   console.log("📊 Statuts:", {
+    unlocked: sessions.filter((s: any) => s.status === 'unlocked').length,
     locked: sessions.filter((s: any) => s.status === 'locked').length,
-    in_progress: sessions.filter((s: any) => s.status === 'in_progress').length,
-    available: sessions.filter((s: any) => s.status === 'available').length,
   });
 
   // Insertion des sessions (upsert au cas où elles existeraient déjà)

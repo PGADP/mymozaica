@@ -19,10 +19,7 @@ export default function LandingPage() {
 
           {/* LOGO HEADER */}
           <Link href="/" className="block hover:opacity-90 transition-opacity">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-white font-heading font-bold text-xl">M</div>
-              <span className="font-heading font-bold text-xl text-text-main">My Mozaïca</span>
-            </div>
+            <img src="/logo.svg" alt="My Mozaïca" className="h-12" />
           </Link>
 
           <nav className="hidden md:flex gap-8 text-sm font-bold font-body text-gray-600 uppercase tracking-wider">
@@ -452,56 +449,162 @@ export default function LandingPage() {
       </section>
 
       {/* --- PREUVE EMOTIONNELLE --- */}
-      <section className="py-24 bg-primary text-white overflow-hidden relative">
-        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-        <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
-          <Heart size={48} className="mx-auto text-white/50 mb-8 animate-pulse" />
-          <h2 className="font-body text-2xl md:text-4xl leading-tight mb-8 italic font-light">
-            "Je ne savais pas par où commencer. My Mozaïca m'a pris par la main. C'est plus simple que ce que j'imaginais. Aujourd'hui, mes petits-enfants lisent mon histoire."
-          </h2>
-          <div className="flex items-center justify-center gap-4">
-            <div className="w-12 h-12 bg-white/20 rounded-full border-2 border-white flex items-center justify-center text-lg font-bold">MD</div>
-            <div className="text-left">
-              <div className="font-heading font-bold">Monique D.</div>
-              <div className="text-white/70 text-sm">Utilisatrice depuis 2 mois</div>
-            </div>
+      {/* Section Preuve Émotionnelle */}
+<section className="py-32 bg-slate relative overflow-hidden">
+  {/* Mosaic fragments background */}
+  <div className="absolute inset-0 pointer-events-none">
+    <div className="absolute top-10 left-10 w-24 h-24 bg-terracotta/10 rounded-lg rotate-12"></div>
+    <div className="absolute top-1/4 right-20 w-16 h-16 bg-emerald/10 rounded-lg -rotate-6"></div>
+    <div className="absolute bottom-20 left-1/4 w-20 h-20 bg-ochre/10 rounded-lg rotate-3"></div>
+    <div className="absolute bottom-1/3 right-10 w-12 h-12 bg-terracotta/10 rounded-full"></div>
+    <div className="absolute top-1/2 left-5 w-8 h-8 bg-ochre/10 rounded-lg rotate-45"></div>
+  </div>
+
+  <div className="max-w-6xl mx-auto px-6 relative z-10">
+    {/* Section header */}
+    <div className="text-center mb-16">
+      <span className="inline-flex items-center gap-2 text-ochre text-sm font-semibold tracking-widest uppercase mb-4">
+        <span className="w-8 h-px bg-ochre/50"></span>
+        Témoignages
+        <span className="w-8 h-px bg-ochre/50"></span>
+      </span>
+      <h2 className="font-heading text-3xl md:text-5xl text-white font-bold">
+        Des vies transformées en <span className="text-terracotta">héritage</span>
+      </h2>
+    </div>
+
+    {/* Secondary testimonials */}
+    <div className="grid md:grid-cols-2 gap-6 mt-12 max-w-4xl mx-auto">
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300 group">
+        <div className="flex items-start gap-4 mb-4">
+          <div className="w-10 h-10 bg-emerald/20 rounded-lg flex items-center justify-center text-emerald font-bold text-sm shrink-0">
+            JP
+          </div>
+          <div>
+            <div className="text-white font-semibold">Jean-Pierre R.</div>
+            <div className="text-white/40 text-xs">82 ans · Ancien marin</div>
           </div>
         </div>
-      </section>
+        <p className="text-white/70 text-sm leading-relaxed italic">
+          "Mes petits-enfants connaissent enfin mes aventures en mer. Ce livre, c'est mon trésor pour eux."
+        </p>
+        <div className="mt-4 flex gap-1">
+          {[...Array(5)].map((_, i) => (
+            <svg key={i} className="w-4 h-4 text-ochre fill-current" viewBox="0 0 20 20">
+              <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
+            </svg>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white/5 border border-white/10 rounded-2xl p-6 hover:bg-white/10 transition-all duration-300 group">
+        <div className="flex items-start gap-4 mb-4">
+          <div className="w-10 h-10 bg-terracotta/20 rounded-lg flex items-center justify-center text-terracotta font-bold text-sm shrink-0">
+            SL
+          </div>
+          <div>
+            <div className="text-white font-semibold">Suzanne L.</div>
+            <div className="text-white/40 text-xs">71 ans · Artiste peintre</div>
+          </div>
+        </div>
+        <p className="text-white/70 text-sm leading-relaxed italic">
+          "Je croyais que seuls les écrivains pouvaient raconter leur vie. My Mozaïca m'a prouvé le contraire."
+        </p>
+        <div className="mt-4 flex gap-1">
+          {[...Array(5)].map((_, i) => (
+            <svg key={i} className="w-4 h-4 text-ochre fill-current" viewBox="0 0 20 20">
+              <path d="M10 15l-5.878 3.09 1.123-6.545L.489 6.91l6.572-.955L10 0l2.939 5.955 6.572.955-4.756 4.635 1.123 6.545z"/>
+            </svg>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {/* Trust indicators */}
+    <div className="flex flex-wrap justify-center items-center gap-8 mt-16 pt-12 border-t border-white/10">
+      <div className="text-center">
+        <div className="text-4xl font-bold text-white mb-1">2,400+</div>
+        <div className="text-white/40 text-sm">Histoires créées</div>
+      </div>
+      <div className="w-px h-12 bg-white/20 hidden md:block"></div>
+      <div className="text-center">
+        <div className="text-4xl font-bold text-white mb-1">4.9/5</div>
+        <div className="text-white/40 text-sm">Note moyenne</div>
+      </div>
+      <div className="w-px h-12 bg-white/20 hidden md:block"></div>
+      <div className="text-center">
+        <div className="text-4xl font-bold text-white mb-1">98%</div>
+        <div className="text-white/40 text-sm">Recommandent</div>
+      </div>
+    </div>
+  </div>
+</section>
 
       {/* --- PRICING --- */}
       <section id="pricing" className="py-32 px-6 bg-gray-50">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-heading font-bold mb-6 text-gray-900">Un tarif unique et transparent</h2>
-          <p className="text-gray-600 mb-16 max-w-xl mx-auto">Pas d'abonnement caché. Vous payez une fois, vous avez accès à vie à la plateforme pour écrire votre histoire.</p>
+        <div className="max-w-5xl mx-auto text-center">
+          <h2 className="text-3xl md:text-4xl font-heading font-bold mb-6 text-gray-900">Choisissez votre formule</h2>
+          <p className="text-gray-600 mb-16 max-w-xl mx-auto">Pas d'abonnement cache. Vous payez une fois, vous avez acces a vie a la plateforme pour ecrire votre histoire.</p>
 
-          <div className="bg-white border border-gray-200 rounded-3xl shadow-xl p-10 md:p-16 max-w-lg mx-auto relative overflow-hidden">
-            <div className="absolute top-0 right-0 bg-primary text-white text-xs font-bold px-4 py-2 rounded-bl-xl font-body tracking-widest">OFFRE DE LANCEMENT</div>
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* Pack Numerique - 49EUR */}
+            <div className="bg-white border border-gray-200 rounded-3xl shadow-xl p-8 md:p-10 relative overflow-hidden">
+              <h3 className="text-xl font-bold font-heading text-gray-900 mb-2">Pack Numerique</h3>
+              <p className="text-sm text-gray-500 mb-6">Votre biographie en PDF</p>
+              <div className="flex justify-center items-baseline gap-2 mb-8">
+                <span className="text-5xl font-bold text-gray-900 font-heading">49€</span>
+                <span className="text-gray-500 font-body">/ unique</span>
+              </div>
 
-            <h3 className="text-2xl font-bold font-heading text-gray-900 mb-2">Pack Biographie</h3>
-            <div className="flex justify-center items-baseline gap-2 my-8">
-              <span className="text-6xl font-bold text-gray-900 font-heading">49€</span>
-              <span className="text-gray-500 font-body">/ unique</span>
+              <ul className="text-left space-y-4 mb-8 text-gray-700 font-medium text-sm">
+                <li className="flex items-center gap-3"><CheckCircle size={18} className="text-secondary flex-shrink-0"/> <span>Acces a vie au Dashboard</span></li>
+                <li className="flex items-center gap-3"><CheckCircle size={18} className="text-secondary flex-shrink-0"/> <span>Enregistrement vocal illimite</span></li>
+                <li className="flex items-center gap-3"><CheckCircle size={18} className="text-secondary flex-shrink-0"/> <span>Redaction IA Premium</span></li>
+                <li className="flex items-center gap-3"><CheckCircle size={18} className="text-secondary flex-shrink-0"/> <span>Export PDF Haute Definition</span></li>
+              </ul>
+
+              <Link
+                href="/start?pack=pack1"
+                className="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold py-3 px-6 rounded-xl block text-center transition-all"
+              >
+                Choisir ce pack
+              </Link>
             </div>
 
-            <ul className="text-left space-y-5 mb-12 text-gray-700 font-medium">
-              <li className="flex items-center gap-4"><CheckCircle size={20} className="text-secondary flex-shrink-0"/> <span>Accès à vie au Dashboard</span></li>
-              <li className="flex items-center gap-4"><CheckCircle size={20} className="text-secondary flex-shrink-0"/> <span>Enregistrement vocal illimité</span></li>
-              <li className="flex items-center gap-4"><CheckCircle size={20} className="text-secondary flex-shrink-0"/> <span>Rédaction IA Premium</span></li>
-              <li className="flex items-center gap-4"><CheckCircle size={20} className="text-secondary flex-shrink-0"/> <span>Export PDF Haute Définition</span></li>
-            </ul>
+            {/* Pack Livre - 68EUR */}
+            <div className="bg-white border-2 border-primary rounded-3xl shadow-xl p-8 md:p-10 relative overflow-hidden">
+              <div className="absolute top-0 right-0 bg-primary text-white text-xs font-bold px-4 py-2 rounded-bl-xl font-body tracking-widest">RECOMMANDE</div>
 
-            <Link
-              href="/onboarding"
-              className="w-full btn-primary text-lg py-4 shadow-glow block text-center"
-            >
-              Commencer maintenant
-            </Link>
+              <h3 className="text-xl font-bold font-heading text-gray-900 mb-2">Pack Livre</h3>
+              <p className="text-sm text-gray-500 mb-6">PDF + 1 livre imprime</p>
+              <div className="flex justify-center items-baseline gap-2 mb-8">
+                <span className="text-5xl font-bold text-primary font-heading">68€</span>
+                <span className="text-gray-500 font-body">/ unique</span>
+              </div>
 
-            <p className="text-xs text-gray-500 mt-6 flex justify-center gap-2 items-center">
-              <span className="w-2 h-2 bg-secondary rounded-full"></span> Paiement sécurisé
-            </p>
+              <ul className="text-left space-y-4 mb-8 text-gray-700 font-medium text-sm">
+                <li className="flex items-center gap-3"><CheckCircle size={18} className="text-secondary flex-shrink-0"/> <span>Tout le Pack Numerique</span></li>
+                <li className="flex items-center gap-3"><CheckCircle size={18} className="text-primary flex-shrink-0"/> <span><strong>1 livre imprime inclus</strong></span></li>
+                <li className="flex items-center gap-3"><CheckCircle size={18} className="text-primary flex-shrink-0"/> <span>Livraison France incluse</span></li>
+                <li className="flex items-center gap-3"><CheckCircle size={18} className="text-primary flex-shrink-0"/> <span>Papier ivoire premium</span></li>
+              </ul>
+
+              <Link
+                href="/start?pack=pack2"
+                className="w-full btn-primary text-lg py-3 shadow-glow block text-center"
+              >
+                Choisir ce pack
+              </Link>
+
+              <p className="text-xs text-gray-500 mt-4 text-center">
+                Livres supplementaires : 15€/ex.
+              </p>
+            </div>
           </div>
+
+          <p className="text-xs text-gray-500 mt-8 flex justify-center gap-2 items-center">
+            <span className="w-2 h-2 bg-secondary rounded-full"></span> Paiement securise par LemonSqueezy
+          </p>
         </div>
       </section>
 
@@ -582,13 +685,13 @@ export default function LandingPage() {
             {/* Question 6 */}
             <details className="group bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden hover:shadow-md transition-all">
               <summary className="flex items-center justify-between p-6 cursor-pointer font-heading font-bold text-lg text-gray-900 group-hover:text-primary transition">
-                <span>Y a-t-il des frais supplémentaires après l'achat ?</span>
+                <span>Y a-t-il des frais supplementaires apres l'achat ?</span>
                 <svg className="w-6 h-6 text-primary transform group-open:rotate-180 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </summary>
               <div className="px-6 pb-6 text-gray-600 leading-relaxed">
-                Non, aucun. Le paiement unique de 49€ vous donne un accès à vie à toutes les fonctionnalités : enregistrements illimités, rédaction IA, exports PDF. Pas d'abonnement caché ni de frais mensuels.
+                Non, aucun frais cache. Le Pack Numerique (49€) vous donne un acces a vie pour creer votre biographie en PDF. Le Pack Livre (68€) inclut en plus 1 livre imprime livre en France. Vous pouvez commander des exemplaires supplementaires a 15€ l'unite.
               </div>
             </details>
           </div>
@@ -609,10 +712,7 @@ export default function LandingPage() {
       {/* --- FOOTER --- */}
       <footer className="bg-gray-900 text-white py-12">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-heading font-bold">M</div>
-            <span className="font-heading font-bold text-lg text-white">My Mozaïca</span>
-          </div>
+          <img src="/logoclair.svg" alt="My Mozaïca" className="h-12" />
           <div className="text-sm text-gray-400">
             © {new Date().getFullYear()} My Mozaïca. Tous droits réservés.
           </div>

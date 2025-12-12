@@ -53,18 +53,8 @@ export default function Header({ user }: HeaderProps) {
     <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-border-ui shadow-sm">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo - cliquable vers la landing page */}
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 bg-primary rounded-full group-hover:scale-105 transition-transform flex items-center justify-center text-white font-heading font-bold text-xl shadow-lg shadow-primary/20">
-            M
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xl font-heading font-bold text-text-main leading-none">
-              My Mozaïca
-            </span>
-            <span className="text-xs text-text-muted leading-none mt-0.5">
-              Votre fresque de vie
-            </span>
-          </div>
+        <Link href="/" className="flex items-center gap-3 group hover:opacity-90 transition-opacity">
+          <img src="/logo.svg" alt="My Mozaïca" className="h-10" />
         </Link>
 
         {/* Bulle Profil avec Dropdown */}

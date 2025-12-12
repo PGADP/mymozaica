@@ -10,7 +10,9 @@ function StartPageContent() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
-  // Récupérer l'erreur depuis l'URL
+  // Recuperer le pack et l'erreur depuis l'URL
+  const selectedPack = searchParams.get('pack') || 'pack1'; // Default to pack1
+
   useEffect(() => {
     const error = searchParams.get('error');
     if (error) {
@@ -72,9 +74,11 @@ function StartPageContent() {
         {/* Colonne Droite (Formulaire) */}
         <div className="p-8 md:w-2/3">
           <form action={signupWithProfile}>
+            {/* Hidden field pour le pack selectionne */}
+            <input type="hidden" name="pack" value={selectedPack} />
 
             {/* ============================================ */}
-            {/* ÉTAPE 1 : IDENTITÉ */}
+            {/* ETAPE 1 : IDENTITE */}
             {/* ============================================ */}
             <div className={step === 1 ? 'block space-y-5' : 'hidden'}>
               <div className="grid grid-cols-2 gap-4">

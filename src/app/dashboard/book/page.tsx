@@ -597,36 +597,39 @@ export default function BookPage() {
           {/* Section Achat */}
           <div className="p-6 border-b border-gray-200">
             <span className="inline-block bg-gradient-to-r from-secondary to-secondary-hover text-white text-xs font-bold uppercase tracking-wide px-3 py-1 rounded-full mb-4">
-              Édition limitée
+              Livre imprime
             </span>
             <h3 style={{ fontFamily: "'Abhaya Libre', Georgia, serif" }} className="text-xl font-bold text-gray-800 mb-2">
               Commandez votre exemplaire papier
             </h3>
             <p className="text-sm text-gray-500 mb-5 leading-relaxed">
-              Recevez votre livre en édition premium avec reliure professionnelle.
+              Recevez votre livre en edition premium avec couverture souple mate et papier ivoire.
             </p>
 
             {/* Box prix */}
             <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-2xl p-5 text-center mb-5 relative overflow-hidden">
               <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-secondary to-transparent" />
-              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Prix de lancement</p>
-              <p className="text-3xl font-extrabold text-white mb-1">29,90 €</p>
-              <p className="text-xs text-gray-500">Livraison offerte dès 2 exemplaires</p>
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">A partir de</p>
+              <p className="text-3xl font-extrabold text-white mb-1">15 €</p>
+              <p className="text-xs text-gray-500">Livraison France incluse</p>
             </div>
 
             {/* CTA Commander */}
-            <button className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:-translate-y-1 transition-all mb-4">
+            <Link
+              href="/dashboard/order-book"
+              className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-bold text-base flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:-translate-y-1 transition-all mb-4"
+            >
               <ShoppingCart size={18} />
-              Commander maintenant
-            </button>
+              Commander un exemplaire
+            </Link>
 
             {/* Features */}
             <ul className="space-y-2 mb-4">
               {[
-                'Format 15×21 cm broché premium',
-                'Papier ivoire 100g/m²',
-                'Couverture pelliculée brillante',
-                'Livraison sous 5-7 jours'
+                'Format A5 (14,8 × 21 cm)',
+                'Papier ivoire 60# premium',
+                'Couverture souple mate',
+                'Livraison France 5-10 jours'
               ].map((feature, i) => (
                 <li key={i} className="flex items-center gap-2 text-sm text-gray-600 py-1.5 border-b border-gray-100">
                   <span className="w-4 h-4 bg-emerald-500 rounded-full flex items-center justify-center text-white text-xs flex-shrink-0">✓</span>
@@ -636,7 +639,7 @@ export default function BookPage() {
             </ul>
 
             <div className="text-center text-xs text-gray-400 bg-gray-50 rounded-lg p-2">
-              🔒 Paiement sécurisé • ✨ Satisfait ou remboursé
+              Paiement securise par LemonSqueezy
             </div>
           </div>
 
@@ -658,7 +661,7 @@ export default function BookPage() {
               ) : (
                 <>
                   <Download size={18} />
-                  Télécharger PDF
+                  Telecharger PDF
                 </>
               )}
             </button>

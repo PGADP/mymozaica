@@ -12,7 +12,7 @@ export default function PaymentSuccessPage() {
   const supabase = createClient();
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let timeoutId: NodeJS.Timeout | null = null;
 
     const checkBillingStatus = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -38,7 +38,7 @@ export default function PaymentSuccessPage() {
         setStatus('waiting');
         // Réessayer toutes les 2 secondes pendant 10 secondes
         if (countdown > 0) {
-          setTimeout(() => {
+          timeoutId = setTimeout(() => {
             setCountdown(countdown - 2);
             checkBillingStatus();
           }, 2000);
@@ -49,7 +49,7 @@ export default function PaymentSuccessPage() {
     checkBillingStatus();
 
     return () => {
-      if (interval) clearInterval(interval);
+      if (timeoutId) clearTimeout(timeoutId);
     };
   }, [countdown, router, supabase]);
 
